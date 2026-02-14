@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Papa's Donuteria - Optimized</title>
+<title>Optimized Game Portal</title>
 
 <style>
 body{
@@ -44,22 +44,24 @@ iframe{
   justify-content:center;
 }
 #overlay button{
-  padding:15px 30px;
+  padding:16px 32px;
   font-size:18px;
   background:#4da3ff;
   border:none;
+  border-radius:6px;
   cursor:pointer;
   color:#fff;
-  border-radius:6px;
 }
 #panel{
-  width:260px;
+  width:300px;
   background:#1a1d24;
   padding:15px;
   border-radius:8px;
+  max-height:90vh;
+  overflow:auto;
 }
 .setting{
-  margin-bottom:15px;
+  margin-bottom:14px;
 }
 button{
   background:#2a2f3a;
@@ -70,16 +72,26 @@ button{
   cursor:pointer;
   border-radius:4px;
 }
-button:hover{
+button.active{
   background:#4da3ff;
+}
+button:hover{
+  opacity:.8;
 }
 input[type=range]{
   width:100%;
 }
+select{
+  width:100%;
+  padding:4px;
+  background:#2a2f3a;
+  color:white;
+  border:none;
+}
 .stat{
   font-size:13px;
   opacity:.7;
-  margin-top:5px;
+  margin-top:4px;
 }
 .low-motion *{
   animation:none !important;
@@ -95,12 +107,12 @@ input[type=range]{
     <iframe id="game" src="about:blank" allowfullscreen></iframe>
 
     <div id="overlay">
-      <button onclick="startGame()">Start Game</button>
+      <button id="startBtn">Start Game</button>
     </div>
   </div>
 
   <div id="panel">
-    <h3>Performance</h3>
+    <h3>Performance Control</h3>
 
     <div class="setting">
       <label>Resolution Scale</label>
@@ -109,119 +121,188 @@ input[type=range]{
     </div>
 
     <div class="setting">
-      <button onclick="autoOptimize()">Auto Optimize</button>
-    </div>
-
-    <div class="setting">
       <label>FPS Cap</label><br>
-      <button onclick="setFPS(30)">30</button>
-      <button onclick="setFPS(60)">60</button>
-      <button onclick="setFPS(120)">120</button>
-      <button onclick="setFPS(0)">Unlimited</button>
+      <button id="fps30">30</button>
+      <button id="fps60">60</button>
+      <button id="fps120">120</button>
+      <button id="fps0">Unlimited</button>
     </div>
 
     <div class="setting">
-      <button onclick="toggleMotion()">Toggle Animations</button>
+      <label>Power Mode</label><br>
+      <button id="modePerformance">Performance</button>
+      <button id="modeBalanced">Balanced</button>
+      <button id="modeQuality">Quality</button>
     </div>
 
     <div class="setting">
-      <button onclick="fullscreen()">Fullscreen</button>
+      <label>Disable Animations</label><br>
+      <button id="toggleAnim">Toggle</button>
+    </div>
+
+    <div class="setting">
+      <label>Server Region</label>
+      <select id="region">
+        <option>Auto</option>
+        <option>US East</option>
+        <option>US West</option>
+        <option>Europe</option>
+        <option>Asia</option>
+      </select>
+    </div>
+
+    <div class="setting">
+      <button id="autoOptimize">Auto Optimize</button>
+      <button id="fullscreenBtn">Fullscreen</button>
     </div>
 
     <div class="stat">FPS: <span id="fps">0</span></div>
     <div class="stat">Ping: <span id="ping">0</span> ms</div>
-  </div>
+    <div class="stat">Jitter: <span id="jitter">0</span> ms</div>
 
+  </div>
 </div>
 
 <script>
 const game = document.getElementById("game");
 const slider = document.getElementById("resSlider");
 const label = document.getElementById("resLabel");
+const overlay = document.getElementById("overlay");
 
-/* -------- Start Game -------- */
-function startGame(){
-  game.src = "https://archive.org/embed/papasdonuteria_102";
-  document.getElementById("overlay").style.display="none";
-}
-
-/* -------- Resolution Scaling -------- */
-slider.addEventListener("input", function(){
-  const scale = parseFloat(this.value);
-  game.style.transform = "scale(" + scale + ")";
-  label.textContent = Math.round(scale*100) + "%";
-});
-
-/* -------- Auto Optimize -------- */
-function autoOptimize(){
-  const cores = navigator.hardwareConcurrency || 2;
-  const memory = navigator.deviceMemory || 2;
-  const net = navigator.connection?.effectiveType || "4g";
-
-  let scale = 1;
-
-  if(cores <=4 || memory <=4 || net.includes("3g"))
-    scale = .75;
-
-  if(cores <=2 || memory <=2 || net.includes("2g"))
-    scale = .6;
-
-  slider.value = scale;
-  game.style.transform = "scale(" + scale + ")";
-  label.textContent = Math.round(scale*100) + "%";
-
-  setFPS(60);
-  document.body.classList.add("low-motion");
-}
-
-/* -------- FPS Cap + Counter -------- */
-let cap = 0;
+let fpsCap = 0;
 let lastFrame = 0;
 let frames = 0;
 let lastUpdate = performance.now();
+let lastPing = 0;
 
-function setFPS(limit){
-  cap = limit;
+/* ---------- Start ---------- */
+document.getElementById("startBtn").onclick = () => {
+  game.src = "https://archive.org/embed/papasdonuteria_102";
+  overlay.style.display="none";
+};
+
+/* ---------- Resolution ---------- */
+slider.oninput = function(){
+  const scale = parseFloat(this.value);
+  game.style.transform = "scale(" + scale + ")";
+  label.textContent = Math.round(scale*100) + "%";
+  saveSettings();
+};
+
+/* ---------- FPS ---------- */
+function setFPS(limit, btn){
+  fpsCap = limit;
+  document.querySelectorAll("[id^='fps']").forEach(b=>b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  saveSettings();
 }
+document.getElementById("fps30").onclick = e=>setFPS(30,e.target);
+document.getElementById("fps60").onclick = e=>setFPS(60,e.target);
+document.getElementById("fps120").onclick = e=>setFPS(120,e.target);
+document.getElementById("fps0").onclick = e=>setFPS(0,e.target);
 
+/* ---------- Power Modes ---------- */
+function setMode(mode, btn){
+  document.querySelectorAll("[id^='mode']").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+
+  if(mode==="performance"){
+    slider.value=.7;
+    fpsCap=60;
+    document.body.classList.add("low-motion");
+  }
+  if(mode==="balanced"){
+    slider.value=.85;
+    fpsCap=60;
+    document.body.classList.remove("low-motion");
+  }
+  if(mode==="quality"){
+    slider.value=1;
+    fpsCap=0;
+    document.body.classList.remove("low-motion");
+  }
+  slider.oninput();
+}
+modePerformance.onclick=e=>setMode("performance",e.target);
+modeBalanced.onclick=e=>setMode("balanced",e.target);
+modeQuality.onclick=e=>setMode("quality",e.target);
+
+/* ---------- Animation Toggle ---------- */
+toggleAnim.onclick=()=>{
+  document.body.classList.toggle("low-motion");
+  toggleAnim.classList.toggle("active");
+  saveSettings();
+};
+
+/* ---------- Auto Optimize ---------- */
+autoOptimize.onclick=()=>{
+  const cores=navigator.hardwareConcurrency||2;
+  const memory=navigator.deviceMemory||2;
+  if(cores<=4||memory<=4){
+    setMode("performance",modePerformance);
+  }else{
+    setMode("balanced",modeBalanced);
+  }
+};
+
+/* ---------- True Fullscreen ---------- */
+fullscreenBtn.onclick=()=>{
+  if(!document.fullscreenElement){
+    game.parentElement.requestFullscreen();
+  }else{
+    document.exitFullscreen();
+  }
+};
+
+/* ---------- FPS Counter ---------- */
 function loop(now){
-  if(!cap || now-lastFrame >= 1000/cap){
-    lastFrame = now;
+  if(!fpsCap||now-lastFrame>=1000/fpsCap){
+    lastFrame=now;
     frames++;
   }
-
-  if(now-lastUpdate >=1000){
-    document.getElementById("fps").textContent = frames;
-    frames = 0;
-    lastUpdate = now;
+  if(now-lastUpdate>=1000){
+    fps.textContent=frames;
+    frames=0;
+    lastUpdate=now;
   }
-
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-/* -------- Ping -------- */
-async function ping(){
-  const start = performance.now();
+/* ---------- Ping + Jitter ---------- */
+async function measurePing(){
+  const start=performance.now();
   try{
-    await fetch("https://archive.org", {mode:"no-cors"});
-    document.getElementById("ping").textContent =
-      Math.round(performance.now()-start);
-  }catch{
-    document.getElementById("ping").textContent = "-";
+    await fetch("https://archive.org",{mode:"no-cors"});
+    const pingVal=Math.round(performance.now()-start);
+    ping.textContent=pingVal;
+    jitter.textContent=Math.abs(pingVal-lastPing);
+    lastPing=pingVal;
+  }catch{}
+}
+setInterval(measurePing,4000);
+measurePing();
+
+/* ---------- Save Settings ---------- */
+function saveSettings(){
+  localStorage.setItem("gameSettings",JSON.stringify({
+    scale:slider.value,
+    fps:fpsCap,
+    motion:document.body.classList.contains("low-motion")
+  }));
+}
+function loadSettings(){
+  const data=JSON.parse(localStorage.getItem("gameSettings")||"{}");
+  if(data.scale){
+    slider.value=data.scale;
+    slider.oninput();
+  }
+  if(data.motion){
+    document.body.classList.add("low-motion");
+    toggleAnim.classList.add("active");
   }
 }
-setInterval(ping,5000);
-ping();
-
-/* -------- Utilities -------- */
-function toggleMotion(){
-  document.body.classList.toggle("low-motion");
-}
-
-function fullscreen(){
-  document.getElementById("game-box").requestFullscreen();
-}
+loadSettings();
 </script>
 
 </body>
