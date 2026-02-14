@@ -1,308 +1,176 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Optimized Game Portal</title>
-
+<title>Launcher</title>
 <style>
 body{
   margin:0;
   background:#0f1115;
-  font-family:system-ui;
-  color:#fff;
   display:flex;
   justify-content:center;
-  padding:20px;
-}
-#layout{
-  display:flex;
-  gap:20px;
-  flex-wrap:wrap;
-}
-#game-box{
-  position:relative;
-  width:640px;
-  height:480px;
-  overflow:hidden;
-  background:#000;
-  border-radius:8px;
-}
-iframe{
-  width:640px;
-  height:480px;
-  border:0;
-  transform-origin:top left;
-  display:block;
-}
-#overlay{
-  position:absolute;
-  inset:0;
-  background:rgba(0,0,0,.85);
-  display:flex;
   align-items:center;
-  justify-content:center;
+  height:100vh;
+  font-family:system-ui;
 }
-#overlay button{
-  padding:16px 32px;
+button{
+  padding:18px 40px;
   font-size:18px;
   background:#4da3ff;
   border:none;
-  border-radius:6px;
-  cursor:pointer;
-  color:#fff;
-}
-#panel{
-  width:300px;
-  background:#1a1d24;
-  padding:15px;
   border-radius:8px;
-  max-height:90vh;
-  overflow:auto;
-}
-.setting{
-  margin-bottom:14px;
-}
-button{
-  background:#2a2f3a;
-  border:none;
-  color:#fff;
-  padding:6px 10px;
-  margin:4px 4px 0 0;
-  cursor:pointer;
-  border-radius:4px;
-}
-button.active{
-  background:#4da3ff;
-}
-button:hover{
-  opacity:.8;
-}
-input[type=range]{
-  width:100%;
-}
-select{
-  width:100%;
-  padding:4px;
-  background:#2a2f3a;
   color:white;
-  border:none;
+  cursor:pointer;
 }
-.stat{
-  font-size:13px;
-  opacity:.7;
-  margin-top:4px;
-}
-.low-motion *{
-  animation:none !important;
-  transition:none !important;
-}
+button:hover{opacity:.8;}
 </style>
 </head>
 <body>
 
-<div id="layout">
-
-  <div id="game-box">
-    <iframe id="game" src="about:blank" allowfullscreen></iframe>
-
-    <div id="overlay">
-      <button id="startBtn">Start Game</button>
-    </div>
-  </div>
-
-  <div id="panel">
-    <h3>Performance Control</h3>
-
-    <div class="setting">
-      <label>Resolution Scale</label>
-      <input id="resSlider" type="range" min="0.5" max="1" step="0.01" value="1">
-      <div id="resLabel">100%</div>
-    </div>
-
-    <div class="setting">
-      <label>FPS Cap</label><br>
-      <button id="fps30">30</button>
-      <button id="fps60">60</button>
-      <button id="fps120">120</button>
-      <button id="fps0">Unlimited</button>
-    </div>
-
-    <div class="setting">
-      <label>Power Mode</label><br>
-      <button id="modePerformance">Performance</button>
-      <button id="modeBalanced">Balanced</button>
-      <button id="modeQuality">Quality</button>
-    </div>
-
-    <div class="setting">
-      <label>Disable Animations</label><br>
-      <button id="toggleAnim">Toggle</button>
-    </div>
-
-    <div class="setting">
-      <label>Server Region</label>
-      <select id="region">
-        <option>Auto</option>
-        <option>US East</option>
-        <option>US West</option>
-        <option>Europe</option>
-        <option>Asia</option>
-      </select>
-    </div>
-
-    <div class="setting">
-      <button id="autoOptimize">Auto Optimize</button>
-      <button id="fullscreenBtn">Fullscreen</button>
-    </div>
-
-    <div class="stat">FPS: <span id="fps">0</span></div>
-    <div class="stat">Ping: <span id="ping">0</span> ms</div>
-    <div class="stat">Jitter: <span id="jitter">0</span> ms</div>
-
-  </div>
-</div>
+<button onclick="launch()">Launch Game</button>
 
 <script>
-const game = document.getElementById("game");
-const slider = document.getElementById("resSlider");
-const label = document.getElementById("resLabel");
-const overlay = document.getElementById("overlay");
+function launch(){
 
-let fpsCap = 0;
-let lastFrame = 0;
-let frames = 0;
-let lastUpdate = performance.now();
-let lastPing = 0;
+  const popup = window.open(
+    "",
+    "_blank",
+    "width=1200,height=800,menubar=no,toolbar=no,location=no,status=no,resizable=yes"
+  );
 
-/* ---------- Start ---------- */
-document.getElementById("startBtn").onclick = () => {
-  game.src = "https://archive.org/embed/papasdonuteria_102";
-  overlay.style.display="none";
-};
+  popup.document.write(`
+  <!doctype html>
+  <html>
+  <head>
+  <meta charset="utf-8">
+  <title>Game</title>
+  <style>
+  body{margin:0;background:#0f1115;font-family:system-ui;color:white;display:flex;justify-content:center;padding:20px;}
+  #layout{display:flex;gap:20px;flex-wrap:wrap;}
+  #game-box{position:relative;width:640px;height:480px;background:black;overflow:hidden;border-radius:10px;}
+  #game-box.fullscreen{position:fixed;inset:0;width:100vw;height:100vh;border-radius:0;z-index:999;display:flex;align-items:center;justify-content:center;}
+  iframe{width:640px;height:480px;border:0;transform-origin:center center;display:block;}
+  #overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;}
+  #overlay button{padding:16px 30px;font-size:18px;background:#4da3ff;border:none;border-radius:8px;color:white;cursor:pointer;}
+  #panel{width:300px;background:#1a1d24;padding:15px;border-radius:10px;}
+  .setting{margin-bottom:16px;}
+  button{background:#2a2f3a;border:none;color:white;padding:6px 10px;margin:4px 4px 0 0;cursor:pointer;border-radius:5px;}
+  button.active{background:#4da3ff;}
+  input[type=range]{width:100%;}
+  .low-motion *{animation:none !important;transition:none !important;}
+  </style>
+  </head>
+  <body>
 
-/* ---------- Resolution ---------- */
-slider.oninput = function(){
-  const scale = parseFloat(this.value);
-  game.style.transform = "scale(" + scale + ")";
-  label.textContent = Math.round(scale*100) + "%";
-  saveSettings();
-};
+  <div id="layout">
 
-/* ---------- FPS ---------- */
-function setFPS(limit, btn){
-  fpsCap = limit;
-  document.querySelectorAll("[id^='fps']").forEach(b=>b.classList.remove("active"));
-  if(btn) btn.classList.add("active");
-  saveSettings();
-}
-document.getElementById("fps30").onclick = e=>setFPS(30,e.target);
-document.getElementById("fps60").onclick = e=>setFPS(60,e.target);
-document.getElementById("fps120").onclick = e=>setFPS(120,e.target);
-document.getElementById("fps0").onclick = e=>setFPS(0,e.target);
+    <div id="game-box">
+      <iframe id="game" src="about:blank"></iframe>
+      <div id="overlay">
+        <button id="startBtn">Start Game</button>
+      </div>
+    </div>
 
-/* ---------- Power Modes ---------- */
-function setMode(mode, btn){
-  document.querySelectorAll("[id^='mode']").forEach(b=>b.classList.remove("active"));
-  btn.classList.add("active");
+    <div id="panel">
 
-  if(mode==="performance"){
-    slider.value=.7;
-    fpsCap=60;
-    document.body.classList.add("low-motion");
+      <div class="setting">
+        <label>Resolution</label>
+        <input id="resSlider" type="range" min="0.5" max="1" step="0.01" value="1">
+        <div id="resLabel">100%</div>
+      </div>
+
+      <div class="setting">
+        <label>FPS Cap</label><br>
+        <button id="fps30">30</button>
+        <button id="fps60">60</button>
+        <button id="fps120">120</button>
+        <button id="fpsUnlimited">Unlimited</button>
+      </div>
+
+      <div class="setting">
+        <button id="toggleAnim">Disable Animations</button>
+        <button id="fullscreenBtn">Fullscreen</button>
+      </div>
+
+      <div>FPS: <span id="fps">0</span></div>
+
+    </div>
+  </div>
+
+  <script>
+  const gameBox=document.getElementById("game-box");
+  const game=document.getElementById("game");
+  const slider=document.getElementById("resSlider");
+  const label=document.getElementById("resLabel");
+  let baseScale=1;
+  let isFullscreen=false;
+  let fpsCap=0,lastFrame=0,frames=0,lastUpdate=performance.now();
+
+  document.getElementById("startBtn").onclick=()=>{
+    game.src="https://archive.org/embed/papasdonuteria_102";
+    document.getElementById("overlay").style.display="none";
+  };
+
+  slider.oninput=function(){
+    baseScale=parseFloat(this.value);
+    label.textContent=Math.round(baseScale*100)+"%";
+    applyScale();
+  };
+
+  function applyScale(){
+    if(!isFullscreen){
+      game.style.transform="scale("+baseScale+")";
+      return;
+    }
+    const fit=Math.min(window.innerWidth/640,window.innerHeight/480);
+    game.style.transform="scale("+(fit*(1/baseScale))+")";
   }
-  if(mode==="balanced"){
-    slider.value=.85;
-    fpsCap=60;
-    document.body.classList.remove("low-motion");
-  }
-  if(mode==="quality"){
-    slider.value=1;
-    fpsCap=0;
-    document.body.classList.remove("low-motion");
-  }
-  slider.oninput();
-}
-modePerformance.onclick=e=>setMode("performance",e.target);
-modeBalanced.onclick=e=>setMode("balanced",e.target);
-modeQuality.onclick=e=>setMode("quality",e.target);
 
-/* ---------- Animation Toggle ---------- */
-toggleAnim.onclick=()=>{
-  document.body.classList.toggle("low-motion");
-  toggleAnim.classList.toggle("active");
-  saveSettings();
-};
+  window.addEventListener("resize",applyScale);
 
-/* ---------- Auto Optimize ---------- */
-autoOptimize.onclick=()=>{
-  const cores=navigator.hardwareConcurrency||2;
-  const memory=navigator.deviceMemory||2;
-  if(cores<=4||memory<=4){
-    setMode("performance",modePerformance);
-  }else{
-    setMode("balanced",modeBalanced);
-  }
-};
+  fullscreenBtn.onclick=function(){
+    isFullscreen=!isFullscreen;
+    gameBox.classList.toggle("fullscreen");
+    this.classList.toggle("active");
+    applyScale();
+  };
 
-/* ---------- True Fullscreen ---------- */
-fullscreenBtn.onclick=()=>{
-  if(!document.fullscreenElement){
-    game.parentElement.requestFullscreen();
-  }else{
-    document.exitFullscreen();
+  function setFPS(limit,btn){
+    fpsCap=limit;
+    document.querySelectorAll("[id^='fps']").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
   }
-};
 
-/* ---------- FPS Counter ---------- */
-function loop(now){
-  if(!fpsCap||now-lastFrame>=1000/fpsCap){
-    lastFrame=now;
-    frames++;
-  }
-  if(now-lastUpdate>=1000){
-    fps.textContent=frames;
-    frames=0;
-    lastUpdate=now;
+  fps30.onclick=e=>setFPS(30,e.target);
+  fps60.onclick=e=>setFPS(60,e.target);
+  fps120.onclick=e=>setFPS(120,e.target);
+  fpsUnlimited.onclick=e=>setFPS(0,e.target);
+
+  function loop(now){
+    if(!fpsCap||now-lastFrame>=1000/fpsCap){
+      lastFrame=now;
+      frames++;
+    }
+    if(now-lastUpdate>=1000){
+      document.getElementById("fps").textContent=frames;
+      frames=0;
+      lastUpdate=now;
+    }
+    requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
+  <\/script>
 
-/* ---------- Ping + Jitter ---------- */
-async function measurePing(){
-  const start=performance.now();
-  try{
-    await fetch("https://archive.org",{mode:"no-cors"});
-    const pingVal=Math.round(performance.now()-start);
-    ping.textContent=pingVal;
-    jitter.textContent=Math.abs(pingVal-lastPing);
-    lastPing=pingVal;
-  }catch{}
-}
-setInterval(measurePing,4000);
-measurePing();
+  </body>
+  </html>
+  `);
 
-/* ---------- Save Settings ---------- */
-function saveSettings(){
-  localStorage.setItem("gameSettings",JSON.stringify({
-    scale:slider.value,
-    fps:fpsCap,
-    motion:document.body.classList.contains("low-motion")
-  }));
+  popup.document.close();
+
+  // Clear original tab
+  document.body.innerHTML="";
+  document.title="";
 }
-function loadSettings(){
-  const data=JSON.parse(localStorage.getItem("gameSettings")||"{}");
-  if(data.scale){
-    slider.value=data.scale;
-    slider.oninput();
-  }
-  if(data.motion){
-    document.body.classList.add("low-motion");
-    toggleAnim.classList.add("active");
-  }
-}
-loadSettings();
 </script>
 
 </body>
