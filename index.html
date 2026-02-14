@@ -1,119 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Game Portal</title>
-
-<style>
-body{
-  margin:0;
-  background:#1b1b1b;
-  color:white;
-  font-family:sans-serif;
-  display:flex;
-  height:100vh;
-  overflow:hidden;
-}
-
-#layout{
-  display:flex;
-  width:100%;
-}
-
-#game-box{
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:black;
-  position:relative;
-  overflow:hidden;
-}
-
-#game-box.fullscreen{
-  position:fixed;
-  inset:0;
-  z-index:9999;
-}
-
-iframe{
-  transform-origin:top left;
-}
-
-#panel{
-  width:300px;
-  background:#222;
-  padding:15px;
-  box-sizing:border-box;
-  overflow-y:auto;
-}
-
-label{
-  display:block;
-  margin-top:12px;
-}
-
-button{
-  margin-top:10px;
-  width:100%;
-  padding:8px;
-  cursor:pointer;
-}
-
-#fps{
-  margin-top:10px;
-  font-weight:bold;
-}
-
-.low-motion *{
-  animation:none !important;
-  transition:none !important;
-}
-</style>
-</head>
-
-<body>
-
-<div id="layout">
-
-  <div id="game-box">
-    <iframe id="game" width="640" height="480"
-      src="https://example.com">
-    </iframe>
-  </div>
-
-  <div id="panel">
-    <h2>Performance Panel</h2>
-
-    <label>Resolution Scale
-      <input type="range" id="scale" min="0.5" max="1" step="0.05" value="1">
-    </label>
-
-    <label>FPS Cap
-      <select id="fpsCap">
-        <option value="0">Unlimited</option>
-        <option value="30">30</option>
-        <option value="60" selected>60</option>
-      </select>
-    </label>
-
-    <button id="fullscreen">Toggle Fullscreen</button>
-    <button id="toggleAnim">Toggle Animations</button>
-
-    <h3>Presets</h3>
-    <button id="perf">Performance</button>
-    <button id="balanced">Balanced</button>
-    <button id="quality">Quality</button>
-
-    <div id="fps">FPS: 0</div>
-  </div>
-
-</div>
-
 <script>
 
 const game = document.getElementById("game");
 const box = document.getElementById("game-box");
+
+const BASE_WIDTH = 640;
+const BASE_HEIGHT = 480;
 
 let baseScale = 1;
 let fpsCap = 60;
@@ -122,13 +13,23 @@ let frames = 0;
 let lastUpdate = performance.now();
 let isFullscreen = false;
 
-function applyScale(){
-  game.style.transform = "scale(" + baseScale + ")";
+function updateScale(){
+  let finalScale = baseScale;
+
+  if(isFullscreen){
+    const fit = Math.min(
+      window.innerWidth / BASE_WIDTH,
+      window.innerHeight / BASE_HEIGHT
+    );
+    finalScale = fit * baseScale;
+  }
+
+  game.style.transform = `scale(${finalScale})`;
 }
 
 document.getElementById("scale").oninput = function(){
   baseScale = parseFloat(this.value);
-  applyScale();
+  updateScale();
 };
 
 document.getElementById("fpsCap").onchange = function(){
@@ -138,25 +39,10 @@ document.getElementById("fpsCap").onchange = function(){
 document.getElementById("fullscreen").onclick = function(){
   isFullscreen = !isFullscreen;
   box.classList.toggle("fullscreen", isFullscreen);
-  updateFullscreenScale();
+  updateScale();
 };
 
-function updateFullscreenScale(){
-  if(!isFullscreen){
-    applyScale();
-    return;
-  }
-
-  const fit = Math.min(
-    window.innerWidth / 640,
-    window.innerHeight / 480
-  );
-
-  const finalScale = fit * (1/baseScale);
-  game.style.transform = "scale(" + finalScale + ")";
-}
-
-window.onresize = updateFullscreenScale;
+window.addEventListener("resize", updateScale);
 
 document.getElementById("toggleAnim").onclick = function(){
   document.body.classList.toggle("low-motion");
@@ -186,12 +72,11 @@ document.getElementById("quality").onclick = function(){
 function syncUI(){
   document.getElementById("scale").value = baseScale;
   document.getElementById("fpsCap").value = fpsCap;
-  updateFullscreenScale();
+  updateScale();
 }
 
 function loop(now){
-
-  if(!fpsCap || now - lastFrame >= 1000/fpsCap){
+  if(!fpsCap || now - lastFrame >= 1000 / fpsCap){
     lastFrame = now;
     frames++;
   }
@@ -205,10 +90,7 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 
-applyScale();
+updateScale();
 requestAnimationFrame(loop);
 
 </script>
-
-</body>
-</html>
