@@ -2,39 +2,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Game Launcher</title>
-<style>
-body{
-  background:#111;
-  color:white;
-  font-family:sans-serif;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  height:100vh;
-}
-button{
-  padding:20px 40px;
-  font-size:20px;
-  cursor:pointer;
-}
-</style>
-</head>
-<body>
-
-<button id="launch">Launch Game</button>
-
-<script>
-document.getElementById("launch").onclick = function(){
-
-const popup = window.open("", "_blank", "width=1200,height=800,resizable=yes");
-
-popup.document.write(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
 <title>Game Portal</title>
+
 <style>
 body{
   margin:0;
@@ -79,34 +48,34 @@ iframe{
   overflow-y:auto;
 }
 
-h2{
-  margin-top:0;
-}
-
 label{
   display:block;
-  margin-top:10px;
+  margin-top:12px;
 }
 
 button{
   margin-top:10px;
   width:100%;
-}
-
-.low-motion *{
-  animation:none !important;
-  transition:none !important;
+  padding:8px;
+  cursor:pointer;
 }
 
 #fps{
   margin-top:10px;
   font-weight:bold;
 }
+
+.low-motion *{
+  animation:none !important;
+  transition:none !important;
+}
 </style>
 </head>
+
 <body>
 
 <div id="layout">
+
   <div id="game-box">
     <iframe id="game" width="640" height="480"
       src="https://example.com">
@@ -114,7 +83,7 @@ button{
   </div>
 
   <div id="panel">
-    <h2>Settings</h2>
+    <h2>Performance Panel</h2>
 
     <label>Resolution Scale
       <input type="range" id="scale" min="0.5" max="1" step="0.05" value="1">
@@ -138,6 +107,7 @@ button{
 
     <div id="fps">FPS: 0</div>
   </div>
+
 </div>
 
 <script>
@@ -150,9 +120,10 @@ let fpsCap = 60;
 let lastFrame = 0;
 let frames = 0;
 let lastUpdate = performance.now();
+let isFullscreen = false;
 
 function applyScale(){
-  game.style.transform = "scale("+baseScale+")";
+  game.style.transform = "scale(" + baseScale + ")";
 }
 
 document.getElementById("scale").oninput = function(){
@@ -165,23 +136,27 @@ document.getElementById("fpsCap").onchange = function(){
 };
 
 document.getElementById("fullscreen").onclick = function(){
-  box.classList.toggle("fullscreen");
-  adjustFullscreenScale();
+  isFullscreen = !isFullscreen;
+  box.classList.toggle("fullscreen", isFullscreen);
+  updateFullscreenScale();
 };
 
-function adjustFullscreenScale(){
-  if(!box.classList.contains("fullscreen")) return;
+function updateFullscreenScale(){
+  if(!isFullscreen){
+    applyScale();
+    return;
+  }
 
   const fit = Math.min(
-    window.innerWidth/640,
-    window.innerHeight/480
+    window.innerWidth / 640,
+    window.innerHeight / 480
   );
 
   const finalScale = fit * (1/baseScale);
-  game.style.transform = "scale("+finalScale+")";
+  game.style.transform = "scale(" + finalScale + ")";
 }
 
-window.onresize = adjustFullscreenScale;
+window.onresize = updateFullscreenScale;
 
 document.getElementById("toggleAnim").onclick = function(){
   document.body.classList.toggle("low-motion");
@@ -191,37 +166,37 @@ document.getElementById("perf").onclick = function(){
   baseScale = 0.7;
   fpsCap = 60;
   document.body.classList.add("low-motion");
-  document.getElementById("scale").value = 0.7;
-  document.getElementById("fpsCap").value = 60;
-  applyScale();
+  syncUI();
 };
 
 document.getElementById("balanced").onclick = function(){
   baseScale = 0.85;
   fpsCap = 60;
   document.body.classList.remove("low-motion");
-  document.getElementById("scale").value = 0.85;
-  document.getElementById("fpsCap").value = 60;
-  applyScale();
+  syncUI();
 };
 
 document.getElementById("quality").onclick = function(){
   baseScale = 1;
   fpsCap = 0;
   document.body.classList.remove("low-motion");
-  document.getElementById("scale").value = 1;
-  document.getElementById("fpsCap").value = 0;
-  applyScale();
+  syncUI();
 };
+
+function syncUI(){
+  document.getElementById("scale").value = baseScale;
+  document.getElementById("fpsCap").value = fpsCap;
+  updateFullscreenScale();
+}
 
 function loop(now){
 
-  if(!fpsCap || now-lastFrame >= 1000/fpsCap){
+  if(!fpsCap || now - lastFrame >= 1000/fpsCap){
     lastFrame = now;
     frames++;
   }
 
-  if(now-lastUpdate >= 1000){
+  if(now - lastUpdate >= 1000){
     document.getElementById("fps").textContent = "FPS: " + frames;
     frames = 0;
     lastUpdate = now;
@@ -233,15 +208,6 @@ function loop(now){
 applyScale();
 requestAnimationFrame(loop);
 
-</script>
-
-</body>
-</html>
-`);
-
-document.body.innerHTML = "";
-
-};
 </script>
 
 </body>
