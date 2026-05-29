@@ -4,29 +4,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Minecraft Web — Play in Your Browser</title>
-  <link rel="shortcut icon" href="src/resources/favicon.ico" type="image/x-icon" />
+  <meta name="description" content="Play Minecraft in your browser — survival mode, singleplayer and multiplayer, no download needed." />
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Eaglercraft game scripts -->
+  <script type="text/javascript" src="classes.js"></script>
+  <script type="text/javascript" src="eagswebrtc.js"></script>
+
+  <script type="text/javascript">
+    window.addEventListener("load", function () {
+      var relayId = Math.floor(Math.random() * 3);
+      window.eaglercraftOpts = {
+        container: "game_frame",
+        assetsURI: "assets.epk",
+        serverWorkerURI: "worker_bootstrap.js",
+        worldsFolder: "MAIN",
+        servers: [],
+        relays: [
+          { addr: "wss://relay.deev.is/",              name: "Relay #1", primary: relayId === 0 },
+          { addr: "wss://relay.lax1dude.net/",         name: "Relay #2", primary: relayId === 1 },
+          { addr: "wss://relay.shhnowisnottheti.me/",  name: "Relay #3", primary: relayId === 2 }
+        ],
+        mainMenu: {
+          splashes: [
+            "Survival mode included!",
+            "Play in your browser!",
+            "No download needed!",
+            "Mine. Build. Survive."
+          ],
+          eaglerLogo: true
+        }
+      };
+      main();
+    });
+  </script>
 </head>
 <body>
 
-  <!-- Game fills the entire viewport exactly as js-minecraft expects -->
-  <div id="background"></div>
-  <div id="canvas-container"></div>
-
-  <!-- Loading overlay -->
-  <div id="loading-screen">
-    <div id="loading-box">
-      <div class="grass-block">
-        <div class="face top"></div>
-        <div class="face front"></div>
-        <div class="face right"></div>
-      </div>
-      <p id="loading-text">Loading Minecraft…</p>
-      <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
-    </div>
-  </div>
-
-  <!-- Top bar overlay -->
+  <!-- Top bar -->
   <header id="topbar">
     <div id="topbar-logo">
       <span class="logo-cube">&#9632;</span>
@@ -38,7 +53,10 @@
     </nav>
   </header>
 
-  <!-- Controls sidebar overlay -->
+  <!-- Eaglercraft renders into this div -->
+  <div id="game_frame"></div>
+
+  <!-- Controls overlay -->
   <aside id="controls-panel">
     <button id="controls-close" onclick="toggleControls()">&#x2715;</button>
     <h2>Controls</h2>
@@ -46,78 +64,39 @@
       <h3>Movement</h3>
       <div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Move</span></div>
       <div class="key-row"><kbd>Space</kbd> <span>Jump</span></div>
-      <div class="key-row"><kbd>Shift</kbd> <span>Sneak</span></div>
-      <div class="key-row"><kbd>Space ×2</kbd> <span>Fly toggle</span></div>
+      <div class="key-row"><kbd>Shift</kbd> <span>Sneak / descend</span></div>
+      <div class="key-row"><kbd>Space ×2</kbd> <span>Fly (creative)</span></div>
     </div>
     <div class="control-group">
       <h3>Interaction</h3>
-      <div class="key-row"><kbd>LMB</kbd> <span>Break block</span></div>
-      <div class="key-row"><kbd>RMB</kbd> <span>Place block</span></div>
+      <div class="key-row"><kbd>LMB</kbd> <span>Break / attack</span></div>
+      <div class="key-row"><kbd>RMB</kbd> <span>Place / use</span></div>
       <div class="key-row"><kbd>MMB</kbd> <span>Pick block</span></div>
       <div class="key-row"><kbd>1–9</kbd> <span>Hotbar slot</span></div>
       <div class="key-row"><kbd>Scroll</kbd> <span>Switch slot</span></div>
       <div class="key-row"><kbd>E</kbd> <span>Inventory</span></div>
+      <div class="key-row"><kbd>Q</kbd> <span>Drop item</span></div>
     </div>
     <div class="control-group">
       <h3>Misc</h3>
       <div class="key-row"><kbd>T</kbd> <span>Chat</span></div>
       <div class="key-row"><kbd>Tab</kbd> <span>Player list</span></div>
       <div class="key-row"><kbd>F5</kbd> <span>Perspective</span></div>
+      <div class="key-row"><kbd>F3</kbd> <span>Debug screen</span></div>
       <div class="key-row"><kbd>Esc</kbd> <span>Menu / unlock mouse</span></div>
     </div>
-    <p class="controls-tip">Click the game to lock your mouse cursor.</p>
+    <p class="controls-tip">Click the game to lock your mouse.<br>Worlds save automatically to your browser.</p>
   </aside>
 
-  <!-- Footer overlay -->
+  <!-- Footer -->
   <footer id="footer">
-    <span>Powered by <a href="https://github.com/LabyStudio/js-minecraft" target="_blank" rel="noopener">js-minecraft</a> (CC BY-NC 4.0 © LabyStudio) &mdash; NOT an official Minecraft product</span>
+    <span>Eaglercraft — Minecraft 1.5.2 in the browser &mdash; NOT an official Minecraft product. <a href="https://github.com/lax1dude/eaglercraft" target="_blank" rel="noopener">Source</a></span>
   </footer>
 
-  <!-- Libraries -->
-  <script type="module" src="libraries/pako.es5.min.js"></script>
-  <script type="module" src="libraries/aes.js"></script>
-  <script type="module" src="libraries/asn1.js"></script>
-  <script type="module" src="libraries/bigint-mod-arith.js"></script>
-  <script type="module" src="libraries/sha1.min.js"></script>
-
-  <!-- Game -->
-  <script type="module" src="src/js/Start.js"></script>
-
   <script>
-    // Fake loading progress (game init can take 2-5s)
-    var progress = 0;
-    var fill = document.getElementById('loading-bar-fill');
-    var loadingText = document.getElementById('loading-text');
-    var loadingScreen = document.getElementById('loading-screen');
-    var msgs = ['Loading terrain…', 'Generating world…', 'Placing trees…', 'Almost ready…'];
-    var msgIdx = 0;
-
-    var timer = setInterval(function() {
-      progress += Math.random() * 14 + 3;
-      if (progress > 95) progress = 95;
-      fill.style.width = progress + '%';
-      if (msgIdx < msgs.length && progress > (msgIdx + 1) * 22) {
-        loadingText.textContent = msgs[msgIdx++];
-      }
-    }, 150);
-
-    // Hide the loading overlay once the game's pageshow event fires and sets window.app
-    var checker = setInterval(function() {
-      if (window.app && window.app.running) {
-        clearInterval(timer);
-        clearInterval(checker);
-        fill.style.width = '100%';
-        setTimeout(function() {
-          loadingScreen.style.opacity = '0';
-          setTimeout(function() { loadingScreen.style.display = 'none'; }, 600);
-        }, 200);
-      }
-    }, 300);
-
     function toggleControls() {
       document.getElementById('controls-panel').classList.toggle('open');
     }
-
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(function() {});

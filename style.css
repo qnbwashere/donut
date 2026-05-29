@@ -1,122 +1,55 @@
-/* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --grass:   #5d9e32;
-  --dark:    #0d0d0d;
-  --panel:   #161616;
-  --border:  #2a2a2a;
-  --text:    #e8e8e8;
-  --muted:   #777;
+  --grass:    #5d9e32;
+  --border:   #2a2a2a;
+  --text:     #e8e8e8;
+  --muted:    #777;
   --topbar-h: 44px;
   --footer-h: 26px;
 }
 
-/* ── Full-viewport game base (identical to original js-minecraft) ── */
 html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   overflow: hidden;
   background: #000;
+  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-#background {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-image: url(src/resources/gui/title/splash.png);
-  background-repeat: no-repeat;
-  background-size: contain;
-  background-position: center;
-  image-rendering: pixelated;
-}
-
-#canvas-container {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* Canvas created by js-minecraft */
-canvas {
-  position: absolute;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: -webkit-crisp-edges;
-  image-rendering: pixelated;
-}
-
-/* ── Loading overlay ── */
-#loading-screen {
+/* ── Eaglercraft game container ── */
+#game_frame {
   position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: #0d0d0d;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.5s;
+  top: var(--topbar-h);
+  bottom: var(--footer-h);
+  left: 0; right: 0;
 }
 
-#loading-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
+/* Eaglercraft injects a canvas; make sure it fills the container */
+#game_frame canvas,
+#game_frame > * {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
-/* CSS Minecraft grass block */
-.grass-block {
-  width: 64px; height: 64px;
-  position: relative;
-  transform-style: preserve-3d;
-  transform: rotateX(30deg) rotateY(-40deg);
-  animation: spin 4s linear infinite;
-}
-@keyframes spin { to { transform: rotateX(30deg) rotateY(320deg); } }
-
-.face { position: absolute; width: 64px; height: 64px; }
-.face.top    { background: var(--grass); transform: rotateX(90deg) translateZ(32px); }
-.face.front  { background: #8b5e3c; transform: translateZ(32px); border-top: 8px solid var(--grass); }
-.face.right  { background: #6b4a2d; transform: rotateY(90deg) translateZ(32px); border-top: 8px solid #4a8a28; }
-
-#loading-text { color: var(--muted); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; letter-spacing: 0.5px; }
-
-#loading-bar-track {
-  width: 220px; height: 6px;
-  background: #222; border-radius: 3px; overflow: hidden;
-}
-#loading-bar-fill {
-  height: 100%; width: 0%;
-  background: var(--grass);
-  transition: width 0.15s ease;
-  border-radius: 3px;
-}
-
-/* ── Top bar overlay ── */
+/* ── Top bar ── */
 #topbar {
   position: fixed;
   top: 0; left: 0; right: 0;
   height: var(--topbar-h);
-  background: rgba(10,10,10,0.88);
+  background: rgba(8,8,8,0.92);
   backdrop-filter: blur(6px);
-  border-bottom: 1px solid rgba(93,158,50,0.4);
+  border-bottom: 1px solid rgba(93,158,50,0.35);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  z-index: 100;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  transition: opacity 0.3s;
+  z-index: 300;
 }
-#topbar:hover { opacity: 1 !important; }
 
 #topbar-logo { display: flex; align-items: center; gap: 8px; user-select: none; }
-.logo-cube { font-size: 20px; color: var(--grass); line-height: 1; }
-.logo-text { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.4px; }
+.logo-cube { font-size: 20px; color: var(--grass); }
+.logo-text { font-size: 17px; font-weight: 700; color: #fff; }
 .logo-sub  { color: var(--grass); font-size: 12px; font-weight: 400; margin-left: 2px; }
 
 #topbar-nav { display: flex; gap: 8px; }
@@ -133,7 +66,7 @@ canvas {
 }
 .nav-btn:hover { background: rgba(93,158,50,0.2); border-color: var(--grass); }
 
-/* ── Controls sidebar overlay ── */
+/* ── Controls sidebar ── */
 #controls-panel {
   position: fixed;
   top: var(--topbar-h);
@@ -141,12 +74,11 @@ canvas {
   bottom: var(--footer-h);
   width: 0;
   overflow: hidden;
-  background: rgba(14,14,14,0.92);
+  background: rgba(12,12,12,0.93);
   backdrop-filter: blur(8px);
   border-left: 1px solid var(--border);
-  z-index: 100;
+  z-index: 300;
   transition: width 0.22s ease;
-  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 #controls-panel.open { width: 230px; overflow-y: auto; padding: 14px 16px; }
 
@@ -158,7 +90,6 @@ canvas {
 #controls-close:hover { color: #fff; }
 
 #controls-panel h2 { font-size: 13px; font-weight: 700; color: var(--grass); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
-
 .control-group { margin-bottom: 14px; }
 .control-group h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 7px; }
 
@@ -180,16 +111,14 @@ kbd {
   text-align: center;
 }
 
-.controls-tip {
-  margin-top: 10px; font-size: 10px; color: var(--muted); line-height: 1.5; font-style: italic;
-}
+.controls-tip { margin-top: 10px; font-size: 10px; color: var(--muted); line-height: 1.6; font-style: italic; }
 
-/* ── Footer overlay ── */
+/* ── Footer ── */
 #footer {
   position: fixed;
   bottom: 0; left: 0; right: 0;
   height: var(--footer-h);
-  background: rgba(10,10,10,0.88);
+  background: rgba(8,8,8,0.92);
   backdrop-filter: blur(6px);
   border-top: 1px solid var(--border);
   display: flex;
@@ -197,13 +126,13 @@ kbd {
   justify-content: center;
   font-size: 10px;
   color: var(--muted);
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  z-index: 100;
+  z-index: 300;
 }
 #footer a { color: var(--grass); text-decoration: none; }
 #footer a:hover { text-decoration: underline; }
 
-/* ── Fullscreen: hide chrome ── */
+/* ── Fullscreen ── */
 :fullscreen #topbar,
 :fullscreen #footer,
 :fullscreen #controls-panel { display: none; }
+:fullscreen #game_frame { top: 0; bottom: 0; }
