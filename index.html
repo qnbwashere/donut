@@ -9,70 +9,66 @@
 </head>
 <body>
 
-  <!-- Top bar -->
+  <!-- Game fills the entire viewport exactly as js-minecraft expects -->
+  <div id="background"></div>
+  <div id="canvas-container"></div>
+
+  <!-- Loading overlay -->
+  <div id="loading-screen">
+    <div id="loading-box">
+      <div class="grass-block">
+        <div class="face top"></div>
+        <div class="face front"></div>
+        <div class="face right"></div>
+      </div>
+      <p id="loading-text">Loading Minecraft…</p>
+      <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Top bar overlay -->
   <header id="topbar">
     <div id="topbar-logo">
       <span class="logo-cube">&#9632;</span>
       <span class="logo-text">Minecraft<span class="logo-sub">Web</span></span>
     </div>
     <nav id="topbar-nav">
-      <button id="btn-controls" class="nav-btn" onclick="toggleControls()">Controls</button>
-      <button id="btn-fullscreen" class="nav-btn" onclick="toggleFullscreen()">&#x26F6; Fullscreen</button>
+      <button class="nav-btn" onclick="toggleControls()">Controls</button>
+      <button class="nav-btn" onclick="toggleFullscreen()">&#x26F6; Fullscreen</button>
     </nav>
   </header>
 
-  <!-- Main layout -->
-  <main id="main">
+  <!-- Controls sidebar overlay -->
+  <aside id="controls-panel">
+    <button id="controls-close" onclick="toggleControls()">&#x2715;</button>
+    <h2>Controls</h2>
+    <div class="control-group">
+      <h3>Movement</h3>
+      <div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Move</span></div>
+      <div class="key-row"><kbd>Space</kbd> <span>Jump</span></div>
+      <div class="key-row"><kbd>Shift</kbd> <span>Sneak</span></div>
+      <div class="key-row"><kbd>Space ×2</kbd> <span>Fly toggle</span></div>
+    </div>
+    <div class="control-group">
+      <h3>Interaction</h3>
+      <div class="key-row"><kbd>LMB</kbd> <span>Break block</span></div>
+      <div class="key-row"><kbd>RMB</kbd> <span>Place block</span></div>
+      <div class="key-row"><kbd>MMB</kbd> <span>Pick block</span></div>
+      <div class="key-row"><kbd>1–9</kbd> <span>Hotbar slot</span></div>
+      <div class="key-row"><kbd>Scroll</kbd> <span>Switch slot</span></div>
+      <div class="key-row"><kbd>E</kbd> <span>Inventory</span></div>
+    </div>
+    <div class="control-group">
+      <h3>Misc</h3>
+      <div class="key-row"><kbd>T</kbd> <span>Chat</span></div>
+      <div class="key-row"><kbd>Tab</kbd> <span>Player list</span></div>
+      <div class="key-row"><kbd>F5</kbd> <span>Perspective</span></div>
+      <div class="key-row"><kbd>Esc</kbd> <span>Menu / unlock mouse</span></div>
+    </div>
+    <p class="controls-tip">Click the game to lock your mouse cursor.</p>
+  </aside>
 
-    <!-- Game panel -->
-    <section id="game-panel">
-      <div id="loading-screen">
-        <div id="loading-box">
-          <div class="grass-block">
-            <div class="face top"></div>
-            <div class="face front"></div>
-            <div class="face right"></div>
-          </div>
-          <p id="loading-text">Loading Minecraft…</p>
-          <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
-        </div>
-      </div>
-      <div id="background" class="fullgame"></div>
-      <div id="canvas-container" class="fullgame"></div>
-    </section>
-
-    <!-- Controls sidebar -->
-    <aside id="controls-panel">
-      <h2>Controls</h2>
-      <div class="control-group">
-        <h3>Movement</h3>
-        <div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Move</span></div>
-        <div class="key-row"><kbd>Space</kbd> <span>Jump</span></div>
-        <div class="key-row"><kbd>Shift</kbd> <span>Sneak</span></div>
-        <div class="key-row"><kbd>2× Space</kbd> <span>Fly toggle</span></div>
-      </div>
-      <div class="control-group">
-        <h3>Interaction</h3>
-        <div class="key-row"><kbd>LMB</kbd> <span>Break block</span></div>
-        <div class="key-row"><kbd>RMB</kbd> <span>Place block</span></div>
-        <div class="key-row"><kbd>MMB</kbd> <span>Pick block</span></div>
-        <div class="key-row"><kbd>1–9</kbd> <span>Hotbar slot</span></div>
-        <div class="key-row"><kbd>Scroll</kbd> <span>Switch slot</span></div>
-        <div class="key-row"><kbd>E</kbd> <span>Inventory</span></div>
-      </div>
-      <div class="control-group">
-        <h3>Misc</h3>
-        <div class="key-row"><kbd>T</kbd> <span>Chat</span></div>
-        <div class="key-row"><kbd>Tab</kbd> <span>Player list</span></div>
-        <div class="key-row"><kbd>F5</kbd> <span>Perspective</span></div>
-        <div class="key-row"><kbd>Esc</kbd> <span>Menu / unlock mouse</span></div>
-      </div>
-      <p class="controls-tip">Click the game to lock the mouse cursor.</p>
-    </aside>
-
-  </main>
-
-  <!-- Footer -->
+  <!-- Footer overlay -->
   <footer id="footer">
     <span>Powered by <a href="https://github.com/LabyStudio/js-minecraft" target="_blank" rel="noopener">js-minecraft</a> (CC BY-NC 4.0 © LabyStudio) &mdash; NOT an official Minecraft product</span>
   </footer>
@@ -88,53 +84,47 @@
   <script type="module" src="src/js/Start.js"></script>
 
   <script>
-    // Fake loading progress bar
-    let progress = 0;
-    const fill = document.getElementById('loading-bar-fill');
-    const loadingText = document.getElementById('loading-text');
-    const loadingScreen = document.getElementById('loading-screen');
+    // Fake loading progress (game init can take 2-5s)
+    var progress = 0;
+    var fill = document.getElementById('loading-bar-fill');
+    var loadingText = document.getElementById('loading-text');
+    var loadingScreen = document.getElementById('loading-screen');
+    var msgs = ['Loading terrain…', 'Generating world…', 'Placing trees…', 'Almost ready…'];
+    var msgIdx = 0;
 
-    const msgs = ['Loading terrain…', 'Generating world…', 'Placing trees…', 'Almost ready…'];
-    let msgIdx = 0;
-
-    const timer = setInterval(() => {
-      progress += Math.random() * 18 + 4;
-      if (progress > 100) progress = 100;
+    var timer = setInterval(function() {
+      progress += Math.random() * 14 + 3;
+      if (progress > 95) progress = 95;
       fill.style.width = progress + '%';
       if (msgIdx < msgs.length && progress > (msgIdx + 1) * 22) {
         loadingText.textContent = msgs[msgIdx++];
       }
-      if (progress >= 100) {
+    }, 150);
+
+    // Hide the loading overlay once the game's pageshow event fires and sets window.app
+    var checker = setInterval(function() {
+      if (window.app && window.app.running) {
         clearInterval(timer);
-        setTimeout(() => { loadingScreen.style.opacity = '0'; }, 300);
-        setTimeout(() => { loadingScreen.style.display = 'none'; }, 900);
+        clearInterval(checker);
+        fill.style.width = '100%';
+        setTimeout(function() {
+          loadingScreen.style.opacity = '0';
+          setTimeout(function() { loadingScreen.style.display = 'none'; }, 600);
+        }, 200);
       }
-    }, 120);
+    }, 300);
 
     function toggleControls() {
-      const panel = document.getElementById('controls-panel');
-      panel.classList.toggle('open');
+      document.getElementById('controls-panel').classList.toggle('open');
     }
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().catch(function() {});
       } else {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(function() {});
       }
     }
-
-    document.addEventListener('fullscreenchange', () => {
-      const btn = document.getElementById('btn-fullscreen');
-      btn.textContent = document.fullscreenElement ? '✕ Exit Fullscreen' : '⛶ Fullscreen';
-    });
-
-    // On mobile, hide topbar after game starts
-    window.addEventListener('pageshow', () => {
-      setTimeout(() => {
-        document.getElementById('topbar').classList.add('slim');
-      }, 2000);
-    });
   </script>
 
 </body>

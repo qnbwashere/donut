@@ -1,149 +1,76 @@
-/* ── Reset & Base ── */
+/* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --grass:    #5d9e32;
-  --dirt:     #8b5e3c;
-  --stone:    #888;
-  --dark:     #0d0d0d;
-  --darker:   #080808;
-  --panel:    #1a1a1a;
-  --border:   #2e2e2e;
-  --text:     #e8e8e8;
-  --muted:    #888;
-  --topbar-h: 48px;
-  --footer-h: 28px;
+  --grass:   #5d9e32;
+  --dark:    #0d0d0d;
+  --panel:   #161616;
+  --border:  #2a2a2a;
+  --text:    #e8e8e8;
+  --muted:   #777;
+  --topbar-h: 44px;
+  --footer-h: 26px;
 }
 
+/* ── Full-viewport game base (identical to original js-minecraft) ── */
 html, body {
-  height: 100%;
-  background: var(--darker);
-  color: var(--text);
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  overflow: hidden;
-}
-
-/* ── Top bar ── */
-#topbar {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: var(--topbar-h);
-  background: #111;
-  border-bottom: 2px solid var(--grass);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  z-index: 100;
-  transition: height 0.3s, opacity 0.3s;
-}
-#topbar.slim { height: 32px; opacity: 0.7; }
-#topbar.slim:hover { height: var(--topbar-h); opacity: 1; }
-
-#topbar-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  user-select: none;
-}
-.logo-cube {
-  font-size: 22px;
-  color: var(--grass);
-  line-height: 1;
-}
-.logo-text {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #fff;
-}
-.logo-sub {
-  color: var(--grass);
-  font-size: 13px;
-  font-weight: 400;
-  margin-left: 2px;
-}
-
-#topbar-nav { display: flex; gap: 8px; }
-.nav-btn {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 5px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.nav-btn:hover { background: #2a2a2a; border-color: var(--grass); color: #fff; }
-
-/* ── Main layout ── */
-#main {
-  position: fixed;
-  top: var(--topbar-h);
-  bottom: var(--footer-h);
-  left: 0;
-  right: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-/* ── Game panel ── */
-#game-panel {
-  position: relative;
-  flex: 1;
-  background: #000;
-  overflow: hidden;
-}
-
-.fullgame {
-  position: absolute;
-  inset: 0;
+  margin: 0;
+  padding: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  background: #000;
 }
 
-/* game canvas rendered by Three.js/js-minecraft sits inside #canvas-container */
-#canvas-container canvas {
+#background {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-image: url(src/resources/gui/title/splash.png);
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
+#canvas-container {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Canvas created by js-minecraft */
+canvas {
   position: absolute;
   image-rendering: -moz-crisp-edges;
   image-rendering: -webkit-crisp-edges;
   image-rendering: pixelated;
 }
 
-#background {
-  background-image: url(src/resources/gui/title/splash.png);
-  background-repeat: no-repeat;
-  background-size: contain;
-  background-position: center;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-
-/* ── Loading screen ── */
+/* ── Loading overlay ── */
 #loading-screen {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 200;
   background: #0d0d0d;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.6s;
+  transition: opacity 0.5s;
 }
 
 #loading-box {
-  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
 }
 
 /* CSS Minecraft grass block */
 .grass-block {
-  width: 64px;
-  height: 64px;
+  width: 64px; height: 64px;
   position: relative;
   transform-style: preserve-3d;
   transform: rotateX(30deg) rotateY(-40deg);
@@ -151,143 +78,132 @@ html, body {
 }
 @keyframes spin { to { transform: rotateX(30deg) rotateY(320deg); } }
 
-.face {
-  position: absolute;
-  width: 64px;
-  height: 64px;
-}
-.face.top {
-  background: var(--grass);
-  transform: rotateX(90deg) translateZ(32px);
-}
-.face.front {
-  background: var(--dirt);
-  transform: translateZ(32px);
-  border-top: 8px solid var(--grass);
-}
-.face.right {
-  background: #6b4a2d;
-  width: 64px;
-  transform: rotateY(90deg) translateZ(32px);
-  border-top: 8px solid #4a8a28;
-}
+.face { position: absolute; width: 64px; height: 64px; }
+.face.top    { background: var(--grass); transform: rotateX(90deg) translateZ(32px); }
+.face.front  { background: #8b5e3c; transform: translateZ(32px); border-top: 8px solid var(--grass); }
+.face.right  { background: #6b4a2d; transform: rotateY(90deg) translateZ(32px); border-top: 8px solid #4a8a28; }
 
-#loading-text {
-  color: var(--muted);
-  font-size: 14px;
-  letter-spacing: 0.5px;
-}
+#loading-text { color: var(--muted); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; letter-spacing: 0.5px; }
 
 #loading-bar-track {
-  width: 220px;
-  height: 6px;
-  background: #222;
-  border-radius: 3px;
-  overflow: hidden;
+  width: 220px; height: 6px;
+  background: #222; border-radius: 3px; overflow: hidden;
 }
 #loading-bar-fill {
-  height: 100%;
-  width: 0%;
+  height: 100%; width: 0%;
   background: var(--grass);
   transition: width 0.15s ease;
   border-radius: 3px;
 }
 
-/* ── Controls sidebar ── */
-#controls-panel {
-  width: 0;
-  overflow: hidden;
-  background: var(--panel);
-  border-left: 1px solid var(--border);
-  transition: width 0.25s ease;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-#controls-panel.open {
-  width: 240px;
-  padding: 16px;
-  overflow-y: auto;
-}
-
-#controls-panel h2 {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--grass);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 16px;
-}
-
-.control-group {
-  margin-bottom: 14px;
-}
-.control-group h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
-.key-row {
+/* ── Top bar overlay ── */
+#topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: rgba(10,10,10,0.88);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(93,158,50,0.4);
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 5px;
-  font-size: 13px;
+  justify-content: space-between;
+  padding: 0 14px;
+  z-index: 100;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  transition: opacity 0.3s;
 }
+#topbar:hover { opacity: 1 !important; }
+
+#topbar-logo { display: flex; align-items: center; gap: 8px; user-select: none; }
+.logo-cube { font-size: 20px; color: var(--grass); line-height: 1; }
+.logo-text { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.4px; }
+.logo-sub  { color: var(--grass); font-size: 12px; font-weight: 400; margin-left: 2px; }
+
+#topbar-nav { display: flex; gap: 8px; }
+.nav-btn {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.nav-btn:hover { background: rgba(93,158,50,0.2); border-color: var(--grass); }
+
+/* ── Controls sidebar overlay ── */
+#controls-panel {
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: var(--footer-h);
+  width: 0;
+  overflow: hidden;
+  background: rgba(14,14,14,0.92);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid var(--border);
+  z-index: 100;
+  transition: width 0.22s ease;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+#controls-panel.open { width: 230px; overflow-y: auto; padding: 14px 16px; }
+
+#controls-close {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: none; color: var(--muted);
+  font-size: 16px; cursor: pointer;
+}
+#controls-close:hover { color: #fff; }
+
+#controls-panel h2 { font-size: 13px; font-weight: 700; color: var(--grass); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+.control-group { margin-bottom: 14px; }
+.control-group h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 7px; }
+
+.key-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 12px; }
 .key-row span { color: var(--muted); }
 
 kbd {
   display: inline-block;
-  background: #252525;
-  border: 1px solid #444;
-  border-bottom: 2px solid #333;
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-bottom: 2px solid #2a2a2a;
   border-radius: 3px;
-  padding: 1px 6px;
-  font-size: 11px;
+  padding: 1px 5px;
+  font-size: 10px;
   font-family: monospace;
-  color: #ccc;
+  color: #bbb;
   white-space: nowrap;
-  min-width: 28px;
+  min-width: 24px;
   text-align: center;
 }
 
 .controls-tip {
-  margin-top: 12px;
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
-  font-style: italic;
+  margin-top: 10px; font-size: 10px; color: var(--muted); line-height: 1.5; font-style: italic;
 }
 
-/* ── Footer ── */
+/* ── Footer overlay ── */
 #footer {
   position: fixed;
   bottom: 0; left: 0; right: 0;
   height: var(--footer-h);
-  background: #0d0d0d;
+  background: rgba(10,10,10,0.88);
+  backdrop-filter: blur(6px);
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
+  font-family: 'Segoe UI', system-ui, sans-serif;
   z-index: 100;
 }
 #footer a { color: var(--grass); text-decoration: none; }
 #footer a:hover { text-decoration: underline; }
 
-/* ── Mobile ── */
-@media (max-width: 600px) {
-  #topbar-nav .nav-btn:first-child { display: none; }
-  #controls-panel.open { width: 200px; }
-  :root { --topbar-h: 40px; }
-}
-
-/* ── Fullscreen ── */
+/* ── Fullscreen: hide chrome ── */
 :fullscreen #topbar,
-:fullscreen #footer { display: none; }
-:fullscreen #main { top: 0; bottom: 0; }
+:fullscreen #footer,
+:fullscreen #controls-panel { display: none; }
