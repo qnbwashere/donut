@@ -7,6 +7,9 @@
   <meta name="description" content="Play Minecraft in your browser — survival mode, singleplayer and multiplayer, no download needed." />
   <link rel="stylesheet" href="style.css" />
 
+  <!-- Try to polyfill WebGL2 using WebGL1 extensions first -->
+  <script src="webgl2-compat.js"></script>
+
   <!-- Check WebGL 2.0 before loading the 4MB game script -->
   <script>
     (function () {
