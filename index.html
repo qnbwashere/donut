@@ -1,96 +1,141 @@
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Minecraft Web — Play in Your Browser</title>
+  <link rel="shortcut icon" href="src/resources/favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
 
-const game = document.getElementById("game");
-const box = document.getElementById("game-box");
+  <!-- Top bar -->
+  <header id="topbar">
+    <div id="topbar-logo">
+      <span class="logo-cube">&#9632;</span>
+      <span class="logo-text">Minecraft<span class="logo-sub">Web</span></span>
+    </div>
+    <nav id="topbar-nav">
+      <button id="btn-controls" class="nav-btn" onclick="toggleControls()">Controls</button>
+      <button id="btn-fullscreen" class="nav-btn" onclick="toggleFullscreen()">&#x26F6; Fullscreen</button>
+    </nav>
+  </header>
 
-const BASE_WIDTH = 640;
-const BASE_HEIGHT = 480;
+  <!-- Main layout -->
+  <main id="main">
 
-let baseScale = 1;
-let fpsCap = 60;
-let lastFrame = 0;
-let frames = 0;
-let lastUpdate = performance.now();
-let isFullscreen = false;
+    <!-- Game panel -->
+    <section id="game-panel">
+      <div id="loading-screen">
+        <div id="loading-box">
+          <div class="grass-block">
+            <div class="face top"></div>
+            <div class="face front"></div>
+            <div class="face right"></div>
+          </div>
+          <p id="loading-text">Loading Minecraft…</p>
+          <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
+        </div>
+      </div>
+      <div id="background" class="fullgame"></div>
+      <div id="canvas-container" class="fullgame"></div>
+    </section>
 
-function updateScale(){
-  let finalScale = baseScale;
+    <!-- Controls sidebar -->
+    <aside id="controls-panel">
+      <h2>Controls</h2>
+      <div class="control-group">
+        <h3>Movement</h3>
+        <div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Move</span></div>
+        <div class="key-row"><kbd>Space</kbd> <span>Jump</span></div>
+        <div class="key-row"><kbd>Shift</kbd> <span>Sneak</span></div>
+        <div class="key-row"><kbd>2× Space</kbd> <span>Fly toggle</span></div>
+      </div>
+      <div class="control-group">
+        <h3>Interaction</h3>
+        <div class="key-row"><kbd>LMB</kbd> <span>Break block</span></div>
+        <div class="key-row"><kbd>RMB</kbd> <span>Place block</span></div>
+        <div class="key-row"><kbd>MMB</kbd> <span>Pick block</span></div>
+        <div class="key-row"><kbd>1–9</kbd> <span>Hotbar slot</span></div>
+        <div class="key-row"><kbd>Scroll</kbd> <span>Switch slot</span></div>
+        <div class="key-row"><kbd>E</kbd> <span>Inventory</span></div>
+      </div>
+      <div class="control-group">
+        <h3>Misc</h3>
+        <div class="key-row"><kbd>T</kbd> <span>Chat</span></div>
+        <div class="key-row"><kbd>Tab</kbd> <span>Player list</span></div>
+        <div class="key-row"><kbd>F5</kbd> <span>Perspective</span></div>
+        <div class="key-row"><kbd>Esc</kbd> <span>Menu / unlock mouse</span></div>
+      </div>
+      <p class="controls-tip">Click the game to lock the mouse cursor.</p>
+    </aside>
 
-  if(isFullscreen){
-    const fit = Math.min(
-      window.innerWidth / BASE_WIDTH,
-      window.innerHeight / BASE_HEIGHT
-    );
-    finalScale = fit * baseScale;
-  }
+  </main>
 
-  game.style.transform = `scale(${finalScale})`;
-}
+  <!-- Footer -->
+  <footer id="footer">
+    <span>Powered by <a href="https://github.com/LabyStudio/js-minecraft" target="_blank" rel="noopener">js-minecraft</a> (CC BY-NC 4.0 © LabyStudio) &mdash; NOT an official Minecraft product</span>
+  </footer>
 
-document.getElementById("scale").oninput = function(){
-  baseScale = parseFloat(this.value);
-  updateScale();
-};
+  <!-- Libraries -->
+  <script type="module" src="libraries/pako.es5.min.js"></script>
+  <script type="module" src="libraries/aes.js"></script>
+  <script type="module" src="libraries/asn1.js"></script>
+  <script type="module" src="libraries/bigint-mod-arith.js"></script>
+  <script type="module" src="libraries/sha1.min.js"></script>
 
-document.getElementById("fpsCap").onchange = function(){
-  fpsCap = parseInt(this.value);
-};
+  <!-- Game -->
+  <script type="module" src="src/js/Start.js"></script>
 
-document.getElementById("fullscreen").onclick = function(){
-  isFullscreen = !isFullscreen;
-  box.classList.toggle("fullscreen", isFullscreen);
-  updateScale();
-};
+  <script>
+    // Fake loading progress bar
+    let progress = 0;
+    const fill = document.getElementById('loading-bar-fill');
+    const loadingText = document.getElementById('loading-text');
+    const loadingScreen = document.getElementById('loading-screen');
 
-window.addEventListener("resize", updateScale);
+    const msgs = ['Loading terrain…', 'Generating world…', 'Placing trees…', 'Almost ready…'];
+    let msgIdx = 0;
 
-document.getElementById("toggleAnim").onclick = function(){
-  document.body.classList.toggle("low-motion");
-};
+    const timer = setInterval(() => {
+      progress += Math.random() * 18 + 4;
+      if (progress > 100) progress = 100;
+      fill.style.width = progress + '%';
+      if (msgIdx < msgs.length && progress > (msgIdx + 1) * 22) {
+        loadingText.textContent = msgs[msgIdx++];
+      }
+      if (progress >= 100) {
+        clearInterval(timer);
+        setTimeout(() => { loadingScreen.style.opacity = '0'; }, 300);
+        setTimeout(() => { loadingScreen.style.display = 'none'; }, 900);
+      }
+    }, 120);
 
-document.getElementById("perf").onclick = function(){
-  baseScale = 0.7;
-  fpsCap = 60;
-  document.body.classList.add("low-motion");
-  syncUI();
-};
+    function toggleControls() {
+      const panel = document.getElementById('controls-panel');
+      panel.classList.toggle('open');
+    }
 
-document.getElementById("balanced").onclick = function(){
-  baseScale = 0.85;
-  fpsCap = 60;
-  document.body.classList.remove("low-motion");
-  syncUI();
-};
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
 
-document.getElementById("quality").onclick = function(){
-  baseScale = 1;
-  fpsCap = 0;
-  document.body.classList.remove("low-motion");
-  syncUI();
-};
+    document.addEventListener('fullscreenchange', () => {
+      const btn = document.getElementById('btn-fullscreen');
+      btn.textContent = document.fullscreenElement ? '✕ Exit Fullscreen' : '⛶ Fullscreen';
+    });
 
-function syncUI(){
-  document.getElementById("scale").value = baseScale;
-  document.getElementById("fpsCap").value = fpsCap;
-  updateScale();
-}
+    // On mobile, hide topbar after game starts
+    window.addEventListener('pageshow', () => {
+      setTimeout(() => {
+        document.getElementById('topbar').classList.add('slim');
+      }, 2000);
+    });
+  </script>
 
-function loop(now){
-  if(!fpsCap || now - lastFrame >= 1000 / fpsCap){
-    lastFrame = now;
-    frames++;
-  }
-
-  if(now - lastUpdate >= 1000){
-    document.getElementById("fps").textContent = "FPS: " + frames;
-    frames = 0;
-    lastUpdate = now;
-  }
-
-  requestAnimationFrame(loop);
-}
-
-updateScale();
-requestAnimationFrame(loop);
-
-</script>
+</body>
+</html>
