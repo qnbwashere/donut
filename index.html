@@ -7,14 +7,30 @@
   <meta name="description" content="Play Minecraft in your browser — survival mode, singleplayer and multiplayer, no download needed." />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Eaglercraft game scripts -->
-  <script type="text/javascript" src="classes.js"></script>
-  <script type="text/javascript" src="eagswebrtc.js"></script>
-
-  <script type="text/javascript">
-    window.addEventListener("load", function () {
-      var relayId = Math.floor(Math.random() * 3);
-      window.eaglercraftOpts = {
+  <!-- Check WebGL 2.0 before loading the 4MB game script -->
+  <script>
+    (function () {
+      var c = document.createElement('canvas');
+      var gl = c.getContext('webgl2');
+      if (!gl) {
+        // Show fix screen immediately; don't load classes.js at all
+        document.addEventListener('DOMContentLoaded', function () {
+          document.getElementById('webgl-error').style.display = 'flex';
+          document.getElementById('game_frame').style.display = 'none';
+          document.getElementById('topbar-nav').style.display = 'none';
+        });
+      } else {
+        // WebGL 2 is fine — load the game scripts dynamically
+        function addScript(src, cb) {
+          var s = document.createElement('script');
+          s.src = src; s.onload = cb;
+          document.head.appendChild(s);
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+          addScript('classes.js', function () {
+            addScript('eagswebrtc.js', function () {
+              var relayId = Math.floor(Math.random() * 3);
+              window.eaglercraftOpts = {
         container: "game_frame",
         assetsURI: "assets.epk",
         serverWorkerURI: "worker_bootstrap.js",
@@ -34,9 +50,13 @@
           ],
           eaglerLogo: true
         }
-      };
-      main();
-    });
+              };
+              main();
+            });
+          });
+        });
+      }
+    })();
   </script>
 </head>
 <body>
@@ -52,6 +72,37 @@
       <button class="nav-btn" onclick="toggleFullscreen()">&#x26F6; Fullscreen</button>
     </nav>
   </header>
+
+  <!-- WebGL 2.0 not available — fix guide -->
+  <div id="webgl-error">
+    <div id="webgl-box">
+      <div class="err-icon">&#9888;</div>
+      <h1>WebGL 2.0 is blocked</h1>
+      <p>Your browser has GPU acceleration disabled, which Minecraft needs.<br>
+         This is easy to fix — follow the steps below.</p>
+
+      <div class="fix-steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <div>
+            Open a new tab and go to<br>
+            <code>chrome://flags/#ignore-gpu-blocklist</code>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <div>Set the flag to <strong>Enabled</strong> and click <strong>Relaunch</strong></div>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <div>Come back to this page — the game will load</div>
+        </div>
+      </div>
+
+      <p class="err-note">If chrome://flags is blocked by your school, try on a personal device or phone.</p>
+      <button class="nav-btn" onclick="location.reload()">&#x21BA; Try again</button>
+    </div>
+  </div>
 
   <!-- Eaglercraft renders into this div -->
   <div id="game_frame"></div>

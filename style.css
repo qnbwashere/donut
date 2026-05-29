@@ -131,6 +131,68 @@ kbd {
 #footer a { color: var(--grass); text-decoration: none; }
 #footer a:hover { text-decoration: underline; }
 
+/* ── WebGL error screen ── */
+#webgl-error {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #0d0d0d;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  padding: 20px;
+}
+
+#webgl-box {
+  max-width: 520px;
+  width: 100%;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+}
+
+.err-icon { font-size: 48px; color: #e8a020; margin-bottom: 12px; }
+
+#webgl-box h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+#webgl-box > p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+
+.fix-steps { text-align: left; margin-bottom: 20px; }
+
+.step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  background: var(--grass);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: #fff;
+}
+
+.step code {
+  display: inline-block;
+  margin-top: 4px;
+  background: #0a0a0a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #7ec8e3;
+  word-break: break-all;
+}
+
+.err-note { font-size: 11px; color: #555; margin-bottom: 20px; }
+
 /* ── Fullscreen ── */
 :fullscreen #topbar,
 :fullscreen #footer,
