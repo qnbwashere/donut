@@ -1261,6 +1261,7 @@ function entryCard(en, ei) {
         <button class="icon-btn" data-rment="${ei}" title="Remove">✕</button>
       </div>
       <div class="subtle" style="font-size:0.75rem;margin-bottom:4px">${esc(ex.m)} · ${esc(equipShort(ex))}${en.targetReps ? ` · target ${esc(String(en.targetReps))} reps` : ''}</div>
+      ${lastTimeLine(en)}
       <table class="set-table">
         <thead><tr>
           <th>Set</th><th>Prev</th>
@@ -1282,6 +1283,26 @@ function entryCard(en, ei) {
       </table>
       <button class="btn sm block mt" data-addset="${ei}">+ Add set</button>
     </div>`;
+}
+
+// "Last time: 30×10, 30×8 · Best: 35 lb" reminder line shown on each
+// exercise during a workout.
+function lastTimeLine(en) {
+  const ex = EXERCISE_BY_ID[en.exId];
+  const last = lastPerformance(en.exId);
+  if (!last || !last.length) return '';
+  const weighted = last.some(s => +s.w);
+  const parts = last.map(s =>
+    ex.t === 't' ? fmtClock(+s.time || 0)
+    : weighted ? `${+s.w || 0}×${+s.r || 0}`
+    : `${+s.r || 0}`);
+  const rec = exerciseRecords(en.exId, S.active ? S.active.start : Infinity);
+  let best = '';
+  if (ex.t === 'wr' && rec.bestW) best = ` · Best: ${rec.bestW} ${unit()}`;
+  else if (ex.t === 'r' && rec.bestReps) best = ` · Best: ${rec.bestReps} reps`;
+  else if (ex.t === 't' && rec.bestTime) best = ` · Best: ${fmtClock(rec.bestTime)}`;
+  const label = ex.t === 't' ? '' : weighted ? ` ${unit()}×reps` : ' reps';
+  return `<div class="last-time">↩ Last time: ${esc(parts.join(', '))}${label}${esc(best)}</div>`;
 }
 
 function prevLabel(ex, s) {
