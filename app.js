@@ -23,7 +23,45 @@ function load() {
   } catch (e) { console.warn('Failed to load state', e); }
   return defaultState();
 }
-function save() { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+function save() {
+  const raw = JSON.stringify(S);
+  localStorage.setItem(STORE_KEY, raw);
+  idbBackup(raw);
+}
+
+// --- Durable storage: everything is mirrored to IndexedDB and the browser is
+// asked to mark storage persistent, so data survives app updates, reinstalls
+// and storage cleanup. localStorage stays the primary store.
+const IDB_NAME = 'repforge-backup';
+function idbOpen(cb) {
+  try {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => cb(req.result);
+    req.onerror = () => cb(null);
+  } catch (e) { cb(null); }
+}
+function idbBackup(raw) {
+  idbOpen(db => {
+    if (!db) return;
+    try {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(raw, 'state');
+      tx.oncomplete = () => db.close();
+    } catch (e) { db.close(); }
+  });
+}
+function idbRestore(cb) {
+  idbOpen(db => {
+    if (!db) { cb(null); return; }
+    try {
+      const g = db.transaction('kv', 'readonly').objectStore('kv').get('state');
+      g.onsuccess = () => { cb(g.result || null); db.close(); };
+      g.onerror = () => { cb(null); db.close(); };
+    } catch (e) { cb(null); db.close(); }
+  });
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 // ===================== Utilities =====================
@@ -941,7 +979,7 @@ function renderExercises(v) {
   const draw = () => {
     const q = exFilter.q.toLowerCase();
     let items = EXERCISES.filter(ex =>
-      (exFilter.muscle === 'All' || ex.m === exFilter.muscle || ex.sec.includes(exFilter.muscle)) &&
+      (exFilter.muscle === 'All' || ex.m === exFilter.muscle || exFilter.muscle in ex.r) &&
       (!q || ex.name.toLowerCase().includes(q)));
     if (exFilter.onlyAvail) items = items.filter(canDo);
     items.sort((a, b) => (canDo(b) - canDo(a)) || a.name.localeCompare(b.name));
@@ -964,6 +1002,15 @@ function renderExercises(v) {
   });
 }
 
+// Sorted [muscle, score] pairs for an exercise, best first.
+function ratingsOf(ex) {
+  return Object.entries(ex.r || {}).sort((a, b) => b[1] - a[1]);
+}
+function ratingBadges(ex, max = 3) {
+  return ratingsOf(ex).slice(0, max)
+    .map(([m, v]) => `<span class="rate-chip"><b>${esc(m)}</b> ${v}/10</span>`).join('');
+}
+
 function exRowHtml(ex, extra = '') {
   const ok = canDo(ex);
   const missing = ok ? [] : missingFor(ex);
@@ -972,7 +1019,8 @@ function exRowHtml(ex, extra = '') {
       <span class="ex-avatar">${esc(ex.m.slice(0, 2).toUpperCase())}</span>
       <span class="grow">
         <b>${esc(ex.name)}</b>
-        <small>${esc(ex.m)} · ${esc(equipShort(ex))}</small>
+        <span class="rate-chips">${ratingBadges(ex)}</span>
+        <small>${esc(equipShort(ex))}</small>
         ${missing.length ? `<div><span class="tag missing">needs ${esc(missing.join(', '))}</span></div>` : ''}
       </span>${extra}
     </button>`;
@@ -1003,10 +1051,17 @@ function openExerciseDetail(exId) {
     <div class="modal-head"><h2>${esc(ex.name)}</h2><button class="icon-btn" id="exd-x">✕</button></div>
     <div class="modal-body">
       <div style="margin-bottom:10px">
-        <span class="tag accent">${esc(ex.m)}</span>
-        ${ex.sec.map(s => `<span class="tag">${esc(s)}</span>`).join(' ')}
         <span class="tag">${esc(equipShort(ex))}</span>
         ${canDo(ex) ? '' : `<span class="tag missing">needs ${esc(missingFor(ex).join(', '))}</span>`}
+      </div>
+      <div class="section-label" style="margin-top:0">Muscles worked (out of 10)</div>
+      <div class="card" style="padding:10px 12px">
+        ${ratingsOf(ex).map(([m, v]) => `
+          <div class="rate-row">
+            <span class="rate-m">${esc(m)}</span>
+            <span class="rate-bar"><span style="width:${v * 10}%"></span></span>
+            <span class="rate-v">${v}/10</span>
+          </div>`).join('')}
       </div>
       <div class="stat-grid" style="margin-bottom:12px">
         <div class="stat-tile"><div class="stat-value">${isWr ? (rec.bestW || '—') : (ex.t === 'r' ? (rec.bestReps || '—') : (rec.bestTime ? fmtClock(rec.bestTime) : '—'))}</div>
@@ -1183,7 +1238,7 @@ function openExercisePicker(onPick, onBack) {
   const redraw = () => {
     const ql = q.toLowerCase();
     let items = EXERCISES.filter(ex =>
-      (muscle === 'All' || ex.m === muscle || ex.sec.includes(muscle)) &&
+      (muscle === 'All' || ex.m === muscle || muscle in ex.r) &&
       (!ql || ex.name.toLowerCase().includes(ql)));
     if (onlyAvail) items = items.filter(canDo);
     items.sort((a, b) => (canDo(b) - canDo(a)) || a.name.localeCompare(b.name));
@@ -1660,6 +1715,7 @@ function renderProfile(v) {
   v.querySelector('#reset-data').onclick = () =>
     confirmModal('Reset everything?', 'All workouts, routines and settings will be permanently deleted from this device.', 'Reset', () => {
       localStorage.removeItem(STORE_KEY);
+      try { indexedDB.deleteDatabase(IDB_NAME); } catch (e) { /* best effort */ }
       S = defaultState();
       obStep = 0; obSel = new Set();
       go('home');
@@ -1668,3 +1724,20 @@ function renderProfile(v) {
 
 // ===================== Boot =====================
 render();
+
+// If localStorage came up empty (cleared by the browser or a reinstall) but a
+// backup exists in IndexedDB, restore it.
+if (!S.onboarded && !S.workouts.length) {
+  idbRestore(raw => {
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (data && (data.onboarded || (data.workouts && data.workouts.length))) {
+        S = Object.assign(defaultState(), data);
+        localStorage.setItem(STORE_KEY, raw);
+        render();
+        toast('Your data was restored ✓');
+      }
+    } catch (e) { /* corrupt backup — ignore */ }
+  });
+}
