@@ -394,3 +394,40 @@ const ROUTINE_TEMPLATES = [
     ],
   },
 ];
+
+// Ordered exercise preferences per movement pattern (compounds/best options first).
+// Used by the workout generator to pick the best exercise the user's gear allows.
+const PATTERN_PREFER = {
+  hpush: ['bb_bench', 'db_bench', 'machine_chest_press', 'smith_bench', 'bb_incline_bench', 'db_incline_bench', 'chest_dip', 'db_floor_press', 'bb_floor_press', 'trx_chest_press', 'pushup', 'band_pushup', 'decline_pushup'],
+  chest_iso: ['cable_fly', 'pec_deck_fly', 'db_fly', 'band_pushup'],
+  hpull: ['bb_row', 'seated_cable_row', 'machine_row', 'db_row', 'tbar_row', 'trx_row', 'inverted_row', 'band_row'],
+  vpull: ['pullup', 'lat_pulldown_ex', 'chinup', 'band_pulldown', 'straight_arm_pulldown', 'db_pullover'],
+  vpush: ['ohp', 'db_shoulder_press', 'seated_db_press', 'machine_shoulder_press', 'smith_ohp', 'arnold_press', 'push_press', 'landmine_press', 'pike_pushup', 'hspu'],
+  side: ['lateral_raise', 'cable_lateral_raise', 'upright_row', 'band_lateral_raise', 'front_raise'],
+  rear: ['face_pull', 'reverse_pec_deck', 'rear_delt_fly', 'band_face_pull'],
+  curl: ['bb_curl', 'ez_curl', 'db_curl', 'hammer_curl', 'cable_curl', 'incline_db_curl', 'preacher_curl', 'concentration_curl', 'band_curl', 'kb_curl'],
+  tri: ['cgbp', 'cable_pushdown', 'skullcrusher', 'db_overhead_ext', 'triceps_dip', 'cable_overhead_ext', 'bench_dip', 'db_kickback', 'band_pushdown', 'diamond_pushup'],
+  squat: ['squat', 'front_squat', 'leg_press_ex', 'hack_squat_ex', 'smith_squat', 'goblet_squat', 'bw_squat', 'pistol_squat'],
+  hinge: ['deadlift', 'trap_bar_deadlift', 'rdl', 'db_rdl', 'good_morning', 'kb_swing', 'rack_pull', 'sumo_deadlift'],
+  lunge: ['bulgarian_split', 'walking_lunge', 'step_up', 'bw_lunge', 'box_jump'],
+  glute: ['hip_thrust', 'glute_bridge', 'single_leg_glute_bridge'],
+  calf: ['machine_calf', 'db_calf', 'standing_calf'],
+  core: ['hanging_leg_raise', 'ab_wheel_rollout', 'cable_crunch', 'plank', 'hanging_knee_raise', 'lying_leg_raise', 'russian_twist', 'crunch', 'bicycle_crunch', 'dead_bug', 'side_plank', 'pallof_press', 'situp', 'mountain_climber'],
+  shrug: ['bb_shrug', 'db_shrug'],
+  ham_iso: ['leg_curl_ex', 'db_rdl', 'good_morning', 'kb_swing'],
+  quad_iso: ['leg_extension_ex'],
+};
+
+// Muscle groups the user can pick for auto-generated workouts, with the
+// movement patterns each cycles through. Order here also pairs groups into
+// rotation days (Chest+Triceps, Back+Biceps, ...).
+const GROUP_DEFS = [
+  { id: 'Chest',     icon: '🫁', patterns: ['hpush', 'hpush', 'chest_iso'] },
+  { id: 'Triceps',   icon: '🔱', patterns: ['tri', 'tri'] },
+  { id: 'Back',      icon: '🪽', patterns: ['hpull', 'vpull', 'hpull'] },
+  { id: 'Biceps',    icon: '💪', patterns: ['curl', 'curl'] },
+  { id: 'Shoulders', icon: '🏔️', patterns: ['vpush', 'side', 'rear'] },
+  { id: 'Core',      icon: '🎯', patterns: ['core', 'core'] },
+  { id: 'Legs',      icon: '🦵', patterns: ['squat', 'hinge', 'lunge', 'calf'] },
+  { id: 'Glutes',    icon: '🍑', patterns: ['glute', 'hinge', 'lunge'] },
+];

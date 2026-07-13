@@ -12,6 +12,7 @@ const defaultState = () => ({
   routines: [],
   workouts: [],
   active: null,
+  plan: null, // { enabled, freq (days between workouts), groups: [muscle ids], anchor: day timestamp }
 });
 
 let S = load();
@@ -101,6 +102,187 @@ function resolveTemplateDay(day) {
     else skipped++;
   }
   return { items, skipped };
+}
+
+// ===================== Workout generator & training plan =====================
+function pickForPattern(pat, taken, rand = false) {
+  const pref = (PATTERN_PREFER[pat] || []).map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !taken.has(ex.id));
+  if (pref.length) return rand ? pref[Math.floor(Math.random() * Math.min(3, pref.length))] : pref[0];
+  return EXERCISES.find(e => e.p === pat && canDo(e) && !taken.has(e.id)) || null;
+}
+
+function repsFor(pat, ex) {
+  if (ex.t === 't') return '30-60s';
+  if (['squat', 'hinge', 'hpush', 'vpush', 'hpull', 'vpull'].includes(pat)) return '6-10';
+  if (pat === 'lunge') return '8-12';
+  return '10-15';
+}
+
+// Build a workout (list of routine items) for the given muscle groups,
+// using only exercises the user's equipment allows.
+function generateWorkout(groupIds, rand = false) {
+  const taken = new Set();
+  const per = groupIds.length <= 1 ? 5 : groupIds.length === 2 ? 3 : groupIds.length <= 4 ? 2 : 1;
+  const items = [];
+  for (const gid of groupIds) {
+    const def = GROUP_DEFS.find(g => g.id === gid);
+    if (!def) continue;
+    let added = 0;
+    for (let i = 0; added < per && i < def.patterns.length * 3; i++) {
+      const pat = def.patterns[i % def.patterns.length];
+      const ex = pickForPattern(pat, taken, rand);
+      if (ex) { taken.add(ex.id); items.push({ exId: ex.id, sets: 3, reps: repsFor(pat, ex) }); added++; }
+      else if (i >= def.patterns.length - 1 && !added && i >= def.patterns.length * 2) break;
+    }
+  }
+  return items.slice(0, 8);
+}
+
+// Split the chosen groups into rotation days (paired in GROUP_DEFS order,
+// which keeps natural pairs like Chest+Triceps and Back+Biceps together).
+function buildRotation(groupIds) {
+  const ordered = GROUP_DEFS.map(g => g.id).filter(id => groupIds.includes(id));
+  if (ordered.length <= 2) return [ordered];
+  const days = [];
+  for (let i = 0; i < ordered.length; i += 2) days.push(ordered.slice(i, i + 2));
+  return days;
+}
+
+function dayStart(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+
+const FREQ_LABELS = { 1: 'every day', 2: 'every other day', 3: 'every 3rd day' };
+
+// What does the plan say about today? null when no active plan.
+function planInfo() {
+  const p = S.plan;
+  if (!p || !p.enabled || !p.groups.length) return null;
+  const today = dayStart(Date.now());
+  const diff = Math.round((today - p.anchor) / 864e5);
+  const rotation = buildRotation(p.groups);
+  const isDay = diff >= 0 && diff % p.freq === 0;
+  const slot = i => ((i % rotation.length) + rotation.length) % rotation.length;
+  const todayIdx = diff / p.freq;
+  const nextIdx = diff < 0 ? 0 : Math.floor(diff / p.freq) + 1;
+  return {
+    isDay,
+    doneToday: S.workouts.some(w => dayStart(w.start) === today),
+    todayGroups: isDay ? rotation[slot(todayIdx)] : null,
+    nextTs: p.anchor + nextIdx * p.freq * 864e5,
+    nextGroups: rotation[slot(nextIdx)],
+    freqLabel: FREQ_LABELS[p.freq] || `every ${p.freq} days`,
+  };
+}
+
+function startGenerated(groups, items) {
+  const entries = items.map(i => makeEntry(i.exId, i.sets, i.reps));
+  startWorkout(groups.join(' & '), entries);
+}
+
+// Plan setup / edit modal
+function openPlanEditor() {
+  const existing = S.plan;
+  let freq = existing?.freq || 2;
+  let sel = new Set(existing?.groups || []);
+
+  const redraw = () => {
+    const rotation = buildRotation([...sel]);
+    openModal(`
+      <div class="modal-head"><h2>${existing ? 'Edit training plan' : 'Set up training plan'}</h2><button class="icon-btn" id="pl-x">✕</button></div>
+      <div class="modal-body">
+        <div class="section-label" style="margin-top:0">How often do you want to train?</div>
+        <div class="chip-row">
+          ${[1, 2, 3].map(f => `<button class="chip ${freq === f ? 'active' : ''}" data-freq="${f}">${f === 1 ? 'Every day' : f === 2 ? 'Every other day' : 'Every 3rd day'}</button>`).join('')}
+        </div>
+        <div class="section-label">Which muscle groups do you want to work?</div>
+        <div class="group-grid">
+          ${GROUP_DEFS.map(g => `
+            <button class="equip-item ${sel.has(g.id) ? 'on' : ''}" data-g="${g.id}">
+              <span class="eq-icon">${g.icon}</span>${g.id}<span class="eq-check">✓</span>
+            </button>`).join('')}
+        </div>
+        ${sel.size ? `
+          <div class="section-label">Your rotation — one of these ${FREQ_LABELS[freq]}</div>
+          <div class="rotation-preview">
+            ${rotation.map((day, i) => {
+              const preview = generateWorkout(day).map(it => EXERCISE_BY_ID[it.exId].name);
+              return `<div><b>Day ${i + 1}: ${esc(day.join(' & '))}</b> — ${esc(preview.slice(0, 3).join(', '))}${preview.length > 3 ? '…' : ''}</div>`;
+            }).join('')}
+          </div>
+          <p class="subtle" style="margin-top:6px">Workouts are auto-built from your equipment each time — starting today.</p>` : ''}
+        <button class="btn primary block mt" id="pl-save" ${sel.size ? '' : 'disabled'}>${existing ? 'Save plan' : 'Start plan'}</button>
+        ${existing ? '<button class="btn danger-ghost block mt" id="pl-off">Turn off plan</button>' : ''}
+      </div>`, {
+      onOpen(root) {
+        root.querySelector('#pl-x').onclick = closeModal;
+        root.querySelectorAll('[data-freq]').forEach(b => b.onclick = () => { freq = +b.dataset.freq; redraw(); });
+        root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
+          const id = b.dataset.g;
+          sel.has(id) ? sel.delete(id) : sel.add(id);
+          redraw();
+        });
+        root.querySelector('#pl-save').onclick = () => {
+          if (!sel.size) return;
+          S.plan = { enabled: true, freq, groups: [...sel], anchor: existing?.anchor ?? dayStart(Date.now()) };
+          if (existing && (existing.freq !== freq)) S.plan.anchor = dayStart(Date.now());
+          save(); closeModal(); go('home');
+          toast('Training plan saved 🗓️');
+        };
+        const off = root.querySelector('#pl-off');
+        if (off) off.onclick = () => { S.plan = null; save(); closeModal(); render(); toast('Plan turned off'); };
+      },
+    });
+  };
+  redraw();
+}
+
+// One-off "generate a workout" modal (Start tab)
+function openGenerator() {
+  let sel = new Set(S.plan?.groups?.slice(0, 2) || ['Chest', 'Back']);
+  let items = null;
+  const redraw = () => {
+    openModal(`
+      <div class="modal-head"><h2>✨ Generate workout</h2><button class="icon-btn" id="gen-x">✕</button></div>
+      <div class="modal-body">
+        <div class="section-label" style="margin-top:0">Pick muscle groups</div>
+        <div class="group-grid">
+          ${GROUP_DEFS.map(g => `
+            <button class="equip-item ${sel.has(g.id) ? 'on' : ''}" data-g="${g.id}">
+              <span class="eq-icon">${g.icon}</span>${g.id}<span class="eq-check">✓</span>
+            </button>`).join('')}
+        </div>
+        ${items ? `
+          <div class="section-label">Your workout (from your equipment)</div>
+          <div class="card">
+            ${items.map(i => {
+              const ex = EXERCISE_BY_ID[i.exId];
+              return `<div class="pr-row"><div class="grow"><b style="font-size:0.88rem">${esc(ex.name)}</b>
+                <div class="subtle">${i.sets} × ${esc(i.reps)} · ${esc(equipShort(ex))}</div></div></div>`;
+            }).join('') || '<div class="empty-state">Nothing available for that combo — add equipment in Profile.</div>'}
+          </div>
+          <div class="row">
+            <button class="btn grow" id="gen-again" style="flex:1">🎲 Shuffle</button>
+            <button class="btn primary" id="gen-start" style="flex:2" ${items.length ? '' : 'disabled'}>Start workout</button>
+          </div>` : `
+          <button class="btn primary block mt" id="gen-go" ${sel.size ? '' : 'disabled'}>Generate</button>`}
+      </div>`, {
+      onOpen(root) {
+        root.querySelector('#gen-x').onclick = closeModal;
+        root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
+          const id = b.dataset.g;
+          sel.has(id) ? sel.delete(id) : sel.add(id);
+          items = items ? generateWorkout([...sel], true) : null;
+          redraw();
+        });
+        const go1 = root.querySelector('#gen-go');
+        if (go1) go1.onclick = () => { items = generateWorkout([...sel], true); redraw(); };
+        const again = root.querySelector('#gen-again');
+        if (again) again.onclick = () => { items = generateWorkout([...sel], true); redraw(); };
+        const st = root.querySelector('#gen-start');
+        if (st) st.onclick = () => { const g = [...sel], it = items; closeModal(); startGenerated(g, it); };
+      },
+    });
+  };
+  redraw();
 }
 
 // ===================== History / PR helpers =====================
@@ -472,6 +654,48 @@ function renderHome(v) {
   const recent = [...S.workouts].sort((a, b) => b.start - a.start).slice(0, 3);
   const prs = collectRecentPRs().slice(0, 4);
 
+  const pi = planInfo();
+  const todayItems = pi?.isDay && !pi.doneToday ? generateWorkout(pi.todayGroups) : null;
+  let planHtml;
+  if (!pi) {
+    planHtml = `
+      <button class="card tappable" id="plan-setup" style="width:100%;text-align:left">
+        <div class="row"><span class="plan-emoji" style="font-size:1.5rem">🗓️</span>
+          <div class="grow"><b>Set up a training plan</b>
+            <div class="subtle">Train every other day (or your pick) — RepForge auto-builds each workout from the muscle groups you choose.</div>
+          </div><span style="color:var(--ink-3)">›</span></div>
+      </button>`;
+  } else if (pi.isDay && !pi.doneToday) {
+    planHtml = `
+      <div class="card plan-card">
+        <div class="row">
+          <div class="grow"><b>💪 Today: ${esc(pi.todayGroups.join(' & '))}</b>
+            <div class="subtle">${todayItems.length} exercises · training ${esc(pi.freqLabel)}</div></div>
+          <button class="btn sm ghost" id="plan-edit">Edit</button>
+        </div>
+        <div class="hist-sets subtle">${esc(todayItems.map(i => EXERCISE_BY_ID[i.exId].name).join(', '))}</div>
+        <button class="btn primary block mt" id="plan-start">Start today's workout</button>
+      </div>`;
+  } else if (pi.isDay && pi.doneToday) {
+    planHtml = `
+      <div class="card plan-card">
+        <div class="row">
+          <div class="grow"><b>✅ Done for today!</b>
+            <div class="subtle">Next: ${esc(pi.nextGroups.join(' & '))} on ${fmtDate(pi.nextTs)}</div></div>
+          <button class="btn sm ghost" id="plan-edit">Edit</button>
+        </div>
+      </div>`;
+  } else {
+    planHtml = `
+      <div class="card plan-rest">
+        <div class="row">
+          <div class="grow"><b>😴 Rest day</b>
+            <div class="subtle">Next workout: ${esc(pi.nextGroups.join(' & '))} on ${fmtDate(pi.nextTs)}</div></div>
+          <button class="btn sm ghost" id="plan-edit">Edit</button>
+        </div>
+      </div>`;
+  }
+
   v.innerHTML = `
     <div class="view-header">
       <div>
@@ -480,6 +704,8 @@ function renderHome(v) {
       </div>
       <button class="icon-btn" id="home-settings" title="Settings">⚙</button>
     </div>
+
+    ${planHtml}
 
     <div class="stat-grid">
       <div class="stat-tile"><div class="stat-value">${thisWeek.length}</div><div class="stat-label">Workouts this week</div></div>
@@ -507,6 +733,12 @@ function renderHome(v) {
       <div class="empty-state"><div class="big">🏋️</div>No workouts yet.<br>Hit the <b>+</b> button to log your first one!</div>`}
   `;
   barChart(v.querySelector('#home-chart'), bars, x => `${fmtNum(x)} ${unit()}`);
+  const setup = v.querySelector('#plan-setup');
+  if (setup) setup.onclick = openPlanEditor;
+  const planEdit = v.querySelector('#plan-edit');
+  if (planEdit) planEdit.onclick = openPlanEditor;
+  const planStart = v.querySelector('#plan-start');
+  if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems);
   v.querySelector('#home-settings').onclick = () => go('profile');
   const hist = v.querySelector('#see-history');
   if (hist) hist.onclick = () => go('history');
@@ -905,6 +1137,7 @@ function renderStart(v) {
   v.innerHTML = `
     <div class="view-header"><h1>Start workout</h1></div>
     <button class="btn primary block" id="start-empty" style="padding:16px">🏁 Start empty workout</button>
+    <button class="btn block mt" id="start-gen" style="padding:16px">✨ Generate a workout — pick muscle groups</button>
     ${S.routines.length ? `<div class="section-label">From a routine</div>` +
       S.routines.map(r => `
         <button class="card tappable" style="width:100%;text-align:left" data-start-r="${r.id}">
@@ -916,6 +1149,7 @@ function renderStart(v) {
         </button>`).join('')
       : `<p class="subtle mt">Tip: build a routine first (or grab a smart template) and it'll show up here for one-tap starts.</p>`}`;
   v.querySelector('#start-empty').onclick = () => startWorkout('Workout', []);
+  v.querySelector('#start-gen').onclick = openGenerator;
   v.querySelectorAll('[data-start-r]').forEach(b => b.onclick = () => startFromRoutine(b.dataset.startR));
 }
 
@@ -1240,6 +1474,16 @@ function renderProfile(v) {
     <p class="subtle" style="margin-bottom:6px">This drives everything: the exercise library, smart templates and swap suggestions only show what you can actually do.</p>
     <div id="prof-equip">${renderEquipGrid(new Set(S.equipment))}</div>
 
+    <div class="section-label">Training plan</div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="grow">${S.plan?.enabled
+          ? `<b style="font-size:0.92rem">${esc(S.plan.groups.join(', '))}</b><div class="subtle">Training ${esc(FREQ_LABELS[S.plan.freq] || 'on schedule')}</div>`
+          : '<span class="subtle">No plan yet — pick a schedule and muscle groups.</span>'}</div>
+        <button class="btn sm" id="prof-plan">${S.plan?.enabled ? 'Edit' : 'Set up'}</button>
+      </div>
+    </div>
+
     <div class="section-label">Settings</div>
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -1273,6 +1517,7 @@ function renderProfile(v) {
     save();
   });
 
+  v.querySelector('#prof-plan').onclick = openPlanEditor;
   v.querySelectorAll('[data-unit]').forEach(b => b.onclick = () => {
     S.settings.unit = b.dataset.unit; save(); render();
   });
