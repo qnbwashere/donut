@@ -1,6 +1,6 @@
 // RepForge service worker — precache the app shell, serve stale-while-revalidate
 // so the app works offline but still picks up new deploys on the next visit.
-const CACHE = 'repforge-v4';
+const CACHE = 'repforge-v5';
 const SHELL = [
   './',
   './index.html',

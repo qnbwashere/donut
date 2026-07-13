@@ -152,78 +152,140 @@ function dayStart(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d
 
 const FREQ_LABELS = { 1: 'every day', 2: 'every other day', 3: 'every 3rd day' };
 
+// Weekly split schedules: a repeating 7-day pattern of workout days
+// (label + muscle groups) and rest days (null), anchored to the save date.
+const UPPER_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'];
+const LOWER_GROUPS = ['Legs', 'Glutes', 'Core'];
+const WEEKLY_PRESETS = [
+  {
+    id: 'ul4',
+    name: 'Upper / Lower · 4 days a week',
+    short: '4 days a week (upper/lower)',
+    pattern: [
+      { label: 'Upper Body', groups: UPPER_GROUPS },
+      { label: 'Lower Body', groups: LOWER_GROUPS },
+      null,
+      { label: 'Upper Body', groups: UPPER_GROUPS },
+      { label: 'Lower Body', groups: LOWER_GROUPS },
+      null,
+      null,
+    ],
+  },
+];
+
 // What does the plan say about today? null when no active plan.
 function planInfo() {
   const p = S.plan;
-  if (!p || !p.enabled || !p.groups.length) return null;
+  if (!p || !p.enabled || (p.type !== 'weekly' && !p.groups?.length)) return null;
   const today = dayStart(Date.now());
   const diff = Math.round((today - p.anchor) / 864e5);
+  const doneToday = S.workouts.some(w => dayStart(w.start) === today);
+
+  if (p.type === 'weekly') {
+    const preset = WEEKLY_PRESETS.find(x => x.id === p.presetId) || WEEKLY_PRESETS[0];
+    const pat = preset.pattern;
+    const idx = ((diff % 7) + 7) % 7;
+    const entry = diff >= 0 ? pat[idx] : null;
+    let nextEntry = null, nextTs = today;
+    for (let d = 1; d <= 7; d++) {
+      const e = pat[((((diff < 0 ? -1 : diff) + d) % 7) + 7) % 7];
+      if (e) { nextEntry = e; nextTs = today + d * 864e5; break; }
+    }
+    return {
+      isDay: !!entry, doneToday,
+      todayGroups: entry ? entry.groups : null,
+      todayName: entry ? entry.label : null,
+      nextTs, nextName: nextEntry ? nextEntry.label : '',
+      freqLabel: preset.short,
+    };
+  }
+
   const rotation = buildRotation(p.groups);
   const isDay = diff >= 0 && diff % p.freq === 0;
   const slot = i => ((i % rotation.length) + rotation.length) % rotation.length;
   const todayIdx = diff / p.freq;
   const nextIdx = diff < 0 ? 0 : Math.floor(diff / p.freq) + 1;
+  const todayGroups = isDay ? rotation[slot(todayIdx)] : null;
+  const nextGroups = rotation[slot(nextIdx)];
   return {
-    isDay,
-    doneToday: S.workouts.some(w => dayStart(w.start) === today),
-    todayGroups: isDay ? rotation[slot(todayIdx)] : null,
+    isDay, doneToday,
+    todayGroups,
+    todayName: todayGroups ? todayGroups.join(' & ') : null,
     nextTs: p.anchor + nextIdx * p.freq * 864e5,
-    nextGroups: rotation[slot(nextIdx)],
+    nextName: nextGroups.join(' & '),
     freqLabel: FREQ_LABELS[p.freq] || `every ${p.freq} days`,
   };
 }
 
-function startGenerated(groups, items) {
+function startGenerated(groups, items, name) {
   const entries = items.map(i => makeEntry(i.exId, i.sets, i.reps));
-  startWorkout(groups.join(' & '), entries);
+  startWorkout(name || groups.join(' & '), entries);
 }
 
 // Plan setup / edit modal
 function openPlanEditor() {
   const existing = S.plan;
-  let freq = existing?.freq || 2;
+  let freq = existing?.type === 'weekly' ? 'ul4' : (existing?.freq || 2); // number = interval mode, string = weekly preset id
   let sel = new Set(existing?.groups || []);
 
   const redraw = () => {
+    const weekly = typeof freq === 'string' ? WEEKLY_PRESETS.find(x => x.id === freq) : null;
     const rotation = buildRotation([...sel]);
+    const canSave = weekly ? true : sel.size > 0;
     openModal(`
       <div class="modal-head"><h2>${existing ? 'Edit training plan' : 'Set up training plan'}</h2><button class="icon-btn" id="pl-x">✕</button></div>
       <div class="modal-body">
         <div class="section-label" style="margin-top:0">How often do you want to train?</div>
         <div class="chip-row">
           ${[1, 2, 3].map(f => `<button class="chip ${freq === f ? 'active' : ''}" data-freq="${f}">${f === 1 ? 'Every day' : f === 2 ? 'Every other day' : 'Every 3rd day'}</button>`).join('')}
+          ${WEEKLY_PRESETS.map(w => `<button class="chip ${freq === w.id ? 'active' : ''}" data-freqw="${w.id}">🏋️ ${esc(w.name)}</button>`).join('')}
         </div>
-        <div class="section-label">Which muscle groups do you want to work?</div>
-        <div class="group-grid">
-          ${GROUP_DEFS.map(g => `
-            <button class="equip-item ${sel.has(g.id) ? 'on' : ''}" data-g="${g.id}">
-              <span class="eq-icon">${g.icon}</span>${g.id}<span class="eq-check">✓</span>
-            </button>`).join('')}
-        </div>
-        ${sel.size ? `
-          <div class="section-label">Your rotation — one of these ${FREQ_LABELS[freq]}</div>
+        ${weekly ? `
+          <div class="section-label">Your week — repeats weekly, starting today</div>
           <div class="rotation-preview">
-            ${rotation.map((day, i) => {
-              const preview = generateWorkout(day).map(it => EXERCISE_BY_ID[it.exId].name);
-              return `<div><b>Day ${i + 1}: ${esc(day.join(' & '))}</b> — ${esc(preview.slice(0, 3).join(', '))}${preview.length > 3 ? '…' : ''}</div>`;
+            ${weekly.pattern.map((e, i) => {
+              if (!e) return `<div><b>Day ${i + 1}:</b> 😴 Rest</div>`;
+              const preview = generateWorkout(e.groups).map(it => EXERCISE_BY_ID[it.exId].name);
+              return `<div><b>Day ${i + 1}: ${esc(e.label)}</b> — ${esc(preview.slice(0, 3).join(', '))}${preview.length > 3 ? '…' : ''}</div>`;
             }).join('')}
           </div>
-          <p class="subtle" style="margin-top:6px">Workouts are auto-built from your equipment each time — starting today.</p>` : ''}
-        <button class="btn primary block mt" id="pl-save" ${sel.size ? '' : 'disabled'}>${existing ? 'Save plan' : 'Start plan'}</button>
+          <p class="subtle" style="margin-top:6px">Each workout is auto-built from your equipment on the day.</p>` : `
+          <div class="section-label">Which muscle groups do you want to work?</div>
+          <div class="group-grid">
+            ${GROUP_DEFS.map(g => `
+              <button class="equip-item ${sel.has(g.id) ? 'on' : ''}" data-g="${g.id}">
+                <span class="eq-icon">${g.icon}</span>${g.id}<span class="eq-check">✓</span>
+              </button>`).join('')}
+          </div>
+          ${sel.size ? `
+            <div class="section-label">Your rotation — one of these ${FREQ_LABELS[freq]}</div>
+            <div class="rotation-preview">
+              ${rotation.map((day, i) => {
+                const preview = generateWorkout(day).map(it => EXERCISE_BY_ID[it.exId].name);
+                return `<div><b>Day ${i + 1}: ${esc(day.join(' & '))}</b> — ${esc(preview.slice(0, 3).join(', '))}${preview.length > 3 ? '…' : ''}</div>`;
+              }).join('')}
+            </div>
+            <p class="subtle" style="margin-top:6px">Workouts are auto-built from your equipment each time — starting today.</p>` : ''}`}
+        <button class="btn primary block mt" id="pl-save" ${canSave ? '' : 'disabled'}>${existing ? 'Save plan' : 'Start plan'}</button>
         ${existing ? '<button class="btn danger-ghost block mt" id="pl-off">Turn off plan</button>' : ''}
       </div>`, {
       onOpen(root) {
         root.querySelector('#pl-x').onclick = closeModal;
         root.querySelectorAll('[data-freq]').forEach(b => b.onclick = () => { freq = +b.dataset.freq; redraw(); });
+        root.querySelectorAll('[data-freqw]').forEach(b => b.onclick = () => { freq = b.dataset.freqw; redraw(); });
         root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
           const id = b.dataset.g;
           sel.has(id) ? sel.delete(id) : sel.add(id);
           redraw();
         });
         root.querySelector('#pl-save').onclick = () => {
-          if (!sel.size) return;
-          S.plan = { enabled: true, freq, groups: [...sel], anchor: existing?.anchor ?? dayStart(Date.now()) };
-          if (existing && (existing.freq !== freq)) S.plan.anchor = dayStart(Date.now());
+          if (weekly) {
+            S.plan = { enabled: true, type: 'weekly', presetId: weekly.id, name: weekly.name, anchor: dayStart(Date.now()) };
+          } else {
+            if (!sel.size) return;
+            S.plan = { enabled: true, type: 'rotation', freq, groups: [...sel], anchor: existing?.anchor ?? dayStart(Date.now()) };
+            if (existing && (existing.freq !== freq || existing.type === 'weekly')) S.plan.anchor = dayStart(Date.now());
+          }
           save(); closeModal(); go('home');
           toast('Training plan saved 🗓️');
         };
@@ -685,8 +747,8 @@ function renderHome(v) {
     planHtml = `
       <div class="card plan-card">
         <div class="row">
-          <div class="grow"><b>💪 Today: ${esc(pi.todayGroups.join(' & '))}</b>
-            <div class="subtle">${todayItems.length} exercises · training ${esc(pi.freqLabel)}</div></div>
+          <div class="grow"><b>💪 Today: ${esc(pi.todayName)}</b>
+            <div class="subtle">${todayItems.length} exercises · ${esc(pi.freqLabel)}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
         <div class="hist-sets subtle">${esc(todayItems.map(i => EXERCISE_BY_ID[i.exId].name).join(', '))}</div>
@@ -697,7 +759,7 @@ function renderHome(v) {
       <div class="card plan-card">
         <div class="row">
           <div class="grow"><b>✅ Done for today!</b>
-            <div class="subtle">Next: ${esc(pi.nextGroups.join(' & '))} on ${fmtDate(pi.nextTs)}</div></div>
+            <div class="subtle">Next: ${esc(pi.nextName)} on ${fmtDate(pi.nextTs)}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
       </div>`;
@@ -706,7 +768,7 @@ function renderHome(v) {
       <div class="card plan-rest">
         <div class="row">
           <div class="grow"><b>😴 Rest day</b>
-            <div class="subtle">Next workout: ${esc(pi.nextGroups.join(' & '))} on ${fmtDate(pi.nextTs)}</div></div>
+            <div class="subtle">Next workout: ${esc(pi.nextName)} on ${fmtDate(pi.nextTs)}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
       </div>`;
@@ -759,7 +821,7 @@ function renderHome(v) {
   const planEdit = v.querySelector('#plan-edit');
   if (planEdit) planEdit.onclick = openPlanEditor;
   const planStart = v.querySelector('#plan-start');
-  if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems);
+  if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems, pi.todayName);
   v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openGenerator([b.dataset.quick]));
   v.querySelector('#home-settings').onclick = () => go('profile');
   const hist = v.querySelector('#see-history');
@@ -1523,7 +1585,7 @@ function renderProfile(v) {
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <div class="grow">${S.plan?.enabled
-          ? `<b style="font-size:0.92rem">${esc(S.plan.groups.join(', '))}</b><div class="subtle">Training ${esc(FREQ_LABELS[S.plan.freq] || 'on schedule')}</div>`
+          ? `<b style="font-size:0.92rem">${esc(S.plan.type === 'weekly' ? S.plan.name : S.plan.groups.join(', '))}</b><div class="subtle">${esc(S.plan.type === 'weekly' ? 'Weekly split' : 'Training ' + (FREQ_LABELS[S.plan.freq] || 'on schedule'))}</div>`
           : '<span class="subtle">No plan yet — pick a schedule and muscle groups.</span>'}</div>
         <button class="btn sm" id="prof-plan">${S.plan?.enabled ? 'Edit' : 'Set up'}</button>
       </div>
