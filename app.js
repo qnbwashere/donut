@@ -235,23 +235,42 @@ function openPlanEditor() {
   redraw();
 }
 
-// One-off "generate a workout" modal (Start tab)
-function openGenerator() {
-  let sel = new Set(S.plan?.groups?.slice(0, 2) || ['Chest', 'Back']);
-  let items = null;
+// Quick workout: simple picks (Chest, Arms, Full Body...) that expand to
+// muscle groups and instantly build a workout from the user's equipment.
+const QUICK_DEFS = [
+  { id: 'Chest',     icon: '🫁', groups: ['Chest'] },
+  { id: 'Back',      icon: '🪽', groups: ['Back'] },
+  { id: 'Shoulders', icon: '🏔️', groups: ['Shoulders'] },
+  { id: 'Arms',      icon: '💪', groups: ['Biceps', 'Triceps'] },
+  { id: 'Legs',      icon: '🦵', groups: ['Legs'] },
+  { id: 'Glutes',    icon: '🍑', groups: ['Glutes'] },
+  { id: 'Core',      icon: '🎯', groups: ['Core'] },
+  { id: 'Full Body', icon: '⚡', groups: ['Chest', 'Back', 'Shoulders', 'Legs', 'Core'] },
+];
+
+function openGenerator(preselect = []) {
+  let sel = new Set(preselect);
+  let items = sel.size ? generateWorkout(expandQuick(sel), true) : null;
+
+  function expandQuick(s) {
+    const out = [];
+    for (const q of QUICK_DEFS) if (s.has(q.id)) for (const g of q.groups) if (!out.includes(g)) out.push(g);
+    return out;
+  }
+
   const redraw = () => {
     openModal(`
-      <div class="modal-head"><h2>✨ Generate workout</h2><button class="icon-btn" id="gen-x">✕</button></div>
+      <div class="modal-head"><h2>⚡ Quick workout</h2><button class="icon-btn" id="gen-x">✕</button></div>
       <div class="modal-body">
-        <div class="section-label" style="margin-top:0">Pick muscle groups</div>
+        <div class="section-label" style="margin-top:0">What do you want to work today?</div>
         <div class="group-grid">
-          ${GROUP_DEFS.map(g => `
+          ${QUICK_DEFS.map(g => `
             <button class="equip-item ${sel.has(g.id) ? 'on' : ''}" data-g="${g.id}">
               <span class="eq-icon">${g.icon}</span>${g.id}<span class="eq-check">✓</span>
             </button>`).join('')}
         </div>
-        ${items ? `
-          <div class="section-label">Your workout (from your equipment)</div>
+        ${!sel.size ? '<p class="subtle center mt">Tap a muscle group and your workout appears here — built from your equipment.</p>' : `
+          <div class="section-label">Your ${esc([...sel].join(' & '))} workout</div>
           <div class="card">
             ${items.map(i => {
               const ex = EXERCISE_BY_ID[i.exId];
@@ -260,23 +279,20 @@ function openGenerator() {
             }).join('') || '<div class="empty-state">Nothing available for that combo — add equipment in Profile.</div>'}
           </div>
           <div class="row">
-            <button class="btn grow" id="gen-again" style="flex:1">🎲 Shuffle</button>
+            <button class="btn" id="gen-again" style="flex:1">🎲 Shuffle</button>
             <button class="btn primary" id="gen-start" style="flex:2" ${items.length ? '' : 'disabled'}>Start workout</button>
-          </div>` : `
-          <button class="btn primary block mt" id="gen-go" ${sel.size ? '' : 'disabled'}>Generate</button>`}
+          </div>`}
       </div>`, {
       onOpen(root) {
         root.querySelector('#gen-x').onclick = closeModal;
         root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
           const id = b.dataset.g;
           sel.has(id) ? sel.delete(id) : sel.add(id);
-          items = items ? generateWorkout([...sel], true) : null;
+          items = sel.size ? generateWorkout(expandQuick(sel), true) : null;
           redraw();
         });
-        const go1 = root.querySelector('#gen-go');
-        if (go1) go1.onclick = () => { items = generateWorkout([...sel], true); redraw(); };
         const again = root.querySelector('#gen-again');
-        if (again) again.onclick = () => { items = generateWorkout([...sel], true); redraw(); };
+        if (again) again.onclick = () => { items = generateWorkout(expandQuick(sel), true); redraw(); };
         const st = root.querySelector('#gen-start');
         if (st) st.onclick = () => { const g = [...sel], it = items; closeModal(); startGenerated(g, it); };
       },
@@ -713,6 +729,11 @@ function renderHome(v) {
       <div class="stat-tile"><div class="stat-value">${streak}🔥</div><div class="stat-label">Week streak</div></div>
     </div>
 
+    <div class="section-label">Quick workout — tap what you want to train</div>
+    <div class="chip-row">
+      ${QUICK_DEFS.map(g => `<button class="chip" data-quick="${g.id}">${g.icon} ${g.id}</button>`).join('')}
+    </div>
+
     <div class="section-label">Weekly volume (${esc(unit())})</div>
     <div class="chart-card"><div id="home-chart"></div></div>
 
@@ -739,6 +760,7 @@ function renderHome(v) {
   if (planEdit) planEdit.onclick = openPlanEditor;
   const planStart = v.querySelector('#plan-start');
   if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems);
+  v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openGenerator([b.dataset.quick]));
   v.querySelector('#home-settings').onclick = () => go('profile');
   const hist = v.querySelector('#see-history');
   if (hist) hist.onclick = () => go('history');
@@ -1137,7 +1159,7 @@ function renderStart(v) {
   v.innerHTML = `
     <div class="view-header"><h1>Start workout</h1></div>
     <button class="btn primary block" id="start-empty" style="padding:16px">🏁 Start empty workout</button>
-    <button class="btn block mt" id="start-gen" style="padding:16px">✨ Generate a workout — pick muscle groups</button>
+    <button class="btn block mt" id="start-gen" style="padding:16px">⚡ Quick workout — pick muscles, get a workout</button>
     ${S.routines.length ? `<div class="section-label">From a routine</div>` +
       S.routines.map(r => `
         <button class="card tappable" style="width:100%;text-align:left" data-start-r="${r.id}">
@@ -1149,7 +1171,7 @@ function renderStart(v) {
         </button>`).join('')
       : `<p class="subtle mt">Tip: build a routine first (or grab a smart template) and it'll show up here for one-tap starts.</p>`}`;
   v.querySelector('#start-empty').onclick = () => startWorkout('Workout', []);
-  v.querySelector('#start-gen').onclick = openGenerator;
+  v.querySelector('#start-gen').onclick = () => openGenerator();
   v.querySelectorAll('[data-start-r]').forEach(b => b.onclick = () => startFromRoutine(b.dataset.startR));
 }
 
@@ -1171,7 +1193,9 @@ function makeEntry(exId, setCount = 3, reps = '') {
   for (let i = 0; i < setCount; i++) {
     const p = prev[i] || prev[prev.length - 1];
     sets.push({
-      w: '', r: '', time: '', done: false,
+      // Pre-fill saved weights/reps from your last session so every set is
+      // one tap away — adjust only what changed.
+      w: p ? p.w : '', r: p ? p.r : '', time: p ? p.time : '', done: false,
       pw: p ? p.w : '', pr: p ? p.r : '', pt: p ? p.time : '',
       target: parseTargetReps(reps),
     });
