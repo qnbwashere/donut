@@ -1,164 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Minecraft Web — Play in Your Browser</title>
-  <meta name="description" content="Play Minecraft in your browser — survival mode, singleplayer and multiplayer, no download needed." />
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- Try to polyfill WebGL2 using WebGL1 extensions first -->
-  <script src="webgl2-compat.js"></script>
-
-  <!-- Check WebGL 2.0 before loading the 4MB game script -->
-  <script>
-    (function () {
-      var c = document.createElement('canvas');
-      var gl = c.getContext('webgl2');
-      if (!gl) {
-        // Show fix screen immediately; don't load classes.js at all
-        document.addEventListener('DOMContentLoaded', function () {
-          document.getElementById('webgl-error').style.display = 'flex';
-          document.getElementById('game_frame').style.display = 'none';
-          document.getElementById('topbar-nav').style.display = 'none';
-        });
-      } else {
-        // WebGL 2 is fine — load the game scripts dynamically
-        function addScript(src, cb) {
-          var s = document.createElement('script');
-          s.src = src; s.onload = cb;
-          document.head.appendChild(s);
-        }
-        document.addEventListener('DOMContentLoaded', function () {
-          addScript('classes.js', function () {
-            addScript('eagswebrtc.js', function () {
-              var relayId = Math.floor(Math.random() * 3);
-              window.eaglercraftOpts = {
-        container: "game_frame",
-        assetsURI: "assets.epk",
-        serverWorkerURI: "worker_bootstrap.js",
-        worldsFolder: "MAIN",
-        servers: [],
-        relays: [
-          { addr: "wss://relay.deev.is/",              name: "Relay #1", primary: relayId === 0 },
-          { addr: "wss://relay.lax1dude.net/",         name: "Relay #2", primary: relayId === 1 },
-          { addr: "wss://relay.shhnowisnottheti.me/",  name: "Relay #3", primary: relayId === 2 }
-        ],
-        mainMenu: {
-          splashes: [
-            "Survival mode included!",
-            "Play in your browser!",
-            "No download needed!",
-            "Mine. Build. Survive."
-          ],
-          eaglerLogo: true
-        }
-              };
-              main();
-            });
-          });
-        });
-      }
-    })();
-  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0d0d">
+  <title>RepForge — Workout Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RepForge">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="icon-192.png">
 </head>
 <body>
+  <div id="app">
+    <main id="view" class="view"></main>
 
-  <!-- Top bar -->
-  <header id="topbar">
-    <div id="topbar-logo">
-      <span class="logo-cube">&#9632;</span>
-      <span class="logo-text">Minecraft<span class="logo-sub">Web</span></span>
-    </div>
-    <nav id="topbar-nav">
-      <button class="nav-btn" onclick="toggleControls()">Controls</button>
-      <button class="nav-btn" onclick="toggleFullscreen()">&#x26F6; Fullscreen</button>
-    </nav>
-  </header>
-
-  <!-- WebGL 2.0 not available — fix guide -->
-  <div id="webgl-error">
-    <div id="webgl-box">
-      <div class="err-icon">&#9888;</div>
-      <h1>WebGL 2.0 is blocked</h1>
-      <p>Your browser has GPU acceleration disabled, which Minecraft needs.<br>
-         This is easy to fix — follow the steps below.</p>
-
-      <div class="fix-steps">
-        <div class="step">
-          <span class="step-num">1</span>
-          <div>
-            Open a new tab and go to<br>
-            <code>chrome://flags/#ignore-gpu-blocklist</code>
-          </div>
-        </div>
-        <div class="step">
-          <span class="step-num">2</span>
-          <div>Set the flag to <strong>Enabled</strong> and click <strong>Relaunch</strong></div>
-        </div>
-        <div class="step">
-          <span class="step-num">3</span>
-          <div>Come back to this page — the game will load</div>
-        </div>
+    <!-- Rest timer banner (shown between sets) -->
+    <div id="rest-banner" class="rest-banner hidden">
+      <div class="rest-progress" id="rest-progress"></div>
+      <div class="rest-content">
+        <span class="rest-label">Rest</span>
+        <span class="rest-time" id="rest-time">1:30</span>
+        <button class="rest-btn" id="rest-minus">-15s</button>
+        <button class="rest-btn" id="rest-plus">+15s</button>
+        <button class="rest-btn rest-skip" id="rest-skip">Skip</button>
       </div>
-
-      <p class="err-note">If chrome://flags is blocked by your school, try on a personal device or phone.</p>
-      <button class="nav-btn" onclick="location.reload()">&#x21BA; Try again</button>
     </div>
+
+    <!-- Resume-workout pill (shown when a workout is running but user navigates away) -->
+    <button id="resume-pill" class="resume-pill hidden">
+      <span class="pulse-dot"></span>
+      <span id="resume-text">Workout in progress</span>
+      <span class="resume-arrow">Resume ›</span>
+    </button>
+
+    <nav id="tabbar" class="tabbar">
+      <button class="tab" data-tab="home"><span class="tab-icon">⌂</span>Home</button>
+      <button class="tab" data-tab="routines"><span class="tab-icon">▤</span>Routines</button>
+      <button class="tab tab-start" data-tab="start"><span class="start-circle">+</span></button>
+      <button class="tab" data-tab="exercises"><span class="tab-icon">≡</span>Exercises</button>
+      <button class="tab" data-tab="profile"><span class="tab-icon">◔</span>Profile</button>
+    </nav>
+
+    <div id="modal-root"></div>
+    <div id="toast-root"></div>
   </div>
 
-  <!-- Eaglercraft renders into this div -->
-  <div id="game_frame"></div>
-
-  <!-- Controls overlay -->
-  <aside id="controls-panel">
-    <button id="controls-close" onclick="toggleControls()">&#x2715;</button>
-    <h2>Controls</h2>
-    <div class="control-group">
-      <h3>Movement</h3>
-      <div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Move</span></div>
-      <div class="key-row"><kbd>Space</kbd> <span>Jump</span></div>
-      <div class="key-row"><kbd>Shift</kbd> <span>Sneak / descend</span></div>
-      <div class="key-row"><kbd>Space ×2</kbd> <span>Fly (creative)</span></div>
-    </div>
-    <div class="control-group">
-      <h3>Interaction</h3>
-      <div class="key-row"><kbd>LMB</kbd> <span>Break / attack</span></div>
-      <div class="key-row"><kbd>RMB</kbd> <span>Place / use</span></div>
-      <div class="key-row"><kbd>MMB</kbd> <span>Pick block</span></div>
-      <div class="key-row"><kbd>1–9</kbd> <span>Hotbar slot</span></div>
-      <div class="key-row"><kbd>Scroll</kbd> <span>Switch slot</span></div>
-      <div class="key-row"><kbd>E</kbd> <span>Inventory</span></div>
-      <div class="key-row"><kbd>Q</kbd> <span>Drop item</span></div>
-    </div>
-    <div class="control-group">
-      <h3>Misc</h3>
-      <div class="key-row"><kbd>T</kbd> <span>Chat</span></div>
-      <div class="key-row"><kbd>Tab</kbd> <span>Player list</span></div>
-      <div class="key-row"><kbd>F5</kbd> <span>Perspective</span></div>
-      <div class="key-row"><kbd>F3</kbd> <span>Debug screen</span></div>
-      <div class="key-row"><kbd>Esc</kbd> <span>Menu / unlock mouse</span></div>
-    </div>
-    <p class="controls-tip">Click the game to lock your mouse.<br>Worlds save automatically to your browser.</p>
-  </aside>
-
-  <!-- Footer -->
-  <footer id="footer">
-    <span>Eaglercraft — Minecraft 1.5.2 in the browser &mdash; NOT an official Minecraft product. <a href="https://github.com/lax1dude/eaglercraft" target="_blank" rel="noopener">Source</a></span>
-  </footer>
-
+  <script src="exercises.js"></script>
+  <script src="app.js"></script>
   <script>
-    function toggleControls() {
-      document.getElementById('controls-panel').classList.toggle('open');
-    }
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(function() {});
-      } else {
-        document.exitFullscreen().catch(function() {});
-      }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
     }
   </script>
-
 </body>
 </html>
