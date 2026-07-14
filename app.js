@@ -1586,28 +1586,40 @@ function finishWorkout() {
 }
 
 // ===================== Rest timer =====================
-let restInt = null, restLeft = 0, restTotal = 0;
+// Wall-clock based: the end time is a real timestamp, so the countdown stays
+// correct while the app is backgrounded (where JS timers are throttled) and
+// even survives closing and reopening the app mid-rest.
+let restInt = null, restEnd = 0, restTotal = 0;
 
-function startRest(sec) {
-  stopRest();
-  restLeft = restTotal = sec;
-  const banner = $('#rest-banner');
-  banner.classList.remove('hidden');
+function restLeftSec() { return Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)); }
+
+function persistRest() {
+  if (S.active) { S.active.restEnd = restEnd; S.active.restTotal = restTotal; save(); }
+}
+
+function startRest(sec, endTs) {
+  stopRest(false);
+  restTotal = sec;
+  restEnd = endTs || (Date.now() + sec * 1000);
+  persistRest();
+  $('#rest-banner').classList.remove('hidden');
   drawRest();
   restInt = setInterval(() => {
-    restLeft--;
-    if (restLeft <= 0) { restDone(); return; }
+    if (restLeftSec() <= 0) { restDone(); return; }
     drawRest();
-  }, 1000);
+  }, 250);
 }
 function drawRest() {
-  $('#rest-time').textContent = fmtClock(Math.max(0, restLeft));
-  $('#rest-progress').style.width = (restLeft / restTotal * 100) + '%';
+  const left = restLeftSec();
+  $('#rest-time').textContent = fmtClock(left);
+  $('#rest-progress').style.width = (restTotal ? left / restTotal * 100 : 0) + '%';
 }
-function stopRest() {
+function stopRest(clearPersist = true) {
   if (restInt) clearInterval(restInt);
   restInt = null;
+  restEnd = 0;
   $('#rest-banner').classList.add('hidden');
+  if (clearPersist && S.active && S.active.restEnd) { S.active.restEnd = 0; save(); }
 }
 function restDone() {
   stopRest();
@@ -1615,9 +1627,23 @@ function restDone() {
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   toast('⏰ Rest over — next set!');
 }
-$('#rest-skip').onclick = stopRest;
-$('#rest-plus').onclick = () => { restLeft += 15; restTotal = Math.max(restTotal, restLeft); drawRest(); };
-$('#rest-minus').onclick = () => { restLeft = Math.max(1, restLeft - 15); drawRest(); };
+// Pick the rest timer back up after a reload / reopen mid-rest.
+function resumeRestIfNeeded() {
+  const a = S.active;
+  if (!a || !a.restEnd) return;
+  if (a.restEnd > Date.now()) startRest(a.restTotal || S.settings.restSec, a.restEnd);
+  else { a.restEnd = 0; save(); }
+}
+// When the app comes back to the foreground, snap the display to real time.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && restEnd) {
+    if (restLeftSec() <= 0) restDone();
+    else drawRest();
+  }
+});
+$('#rest-skip').onclick = () => stopRest();
+$('#rest-plus').onclick = () => { restEnd += 15000; restTotal = Math.max(restTotal, restLeftSec()); persistRest(); drawRest(); };
+$('#rest-minus').onclick = () => { restEnd = Math.max(Date.now() + 1000, restEnd - 15000); persistRest(); drawRest(); };
 
 function beep() {
   try {
@@ -1737,6 +1763,7 @@ function renderProfile(v) {
 
 // ===================== Boot =====================
 render();
+resumeRestIfNeeded();
 
 // If localStorage came up empty (cleared by the browser or a reinstall) but a
 // backup exists in IndexedDB, restore it.
