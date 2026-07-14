@@ -53,6 +53,17 @@
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      // When a new deploy's service worker takes over, reload once so updates
+      // appear on the first reopen instead of one visit behind. All app state
+      // lives in localStorage (including active workouts and the rest timer),
+      // so the reload is lossless. Skip the reload on the very first install.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded || !hadController) return;
+        reloaded = true;
+        location.reload();
+      });
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
   </script>
