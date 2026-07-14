@@ -143,10 +143,15 @@ function resolveTemplateDay(day) {
 }
 
 // ===================== Workout generator & training plan =====================
-function pickForPattern(pat, taken, rand = false) {
-  const pref = (PATTERN_PREFER[pat] || []).map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !taken.has(ex.id));
-  if (pref.length) return rand ? pref[Math.floor(Math.random() * Math.min(3, pref.length))] : pref[0];
-  return EXERCISES.find(e => e.p === pat && canDo(e) && !taken.has(e.id)) || null;
+// variant: undefined/0 = best available (the classic), 'rand' = random among
+// the top 3, a number = deterministic rotation among the top 4 — used to vary
+// accessories from one planned day to the next.
+function pickForPattern(pat, taken, variant) {
+  const cand = (PATTERN_PREFER[pat] || []).map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !taken.has(ex.id));
+  if (!cand.length) return EXERCISES.find(e => e.p === pat && canDo(e) && !taken.has(e.id)) || null;
+  if (variant === 'rand') return cand[Math.floor(Math.random() * Math.min(3, cand.length))];
+  const v = typeof variant === 'number' ? variant : 0;
+  return cand[v % Math.min(4, cand.length)];
 }
 
 function repsFor(pat, ex) {
@@ -157,8 +162,14 @@ function repsFor(pat, ex) {
 }
 
 // Build a workout (list of routine items) for the given muscle groups,
-// using only exercises the user's equipment allows.
-function generateWorkout(groupIds, rand = false) {
+// using only exercises the user's equipment allows. With a `seed` (days since
+// the plan's anchor), each group's first exercise stays the classic pick
+// (bench, squat, barbell curl, ...) while later slots rotate day to day.
+// The big compound slots keep their classic pick every time (bench, rows,
+// squat, overhead press, curls); isolation/accessory slots rotate with the seed.
+const CLASSIC_PATTERNS = new Set(['hpush', 'hpull', 'vpush', 'vpull', 'squat', 'hinge', 'lunge', 'curl']);
+
+function generateWorkout(groupIds, rand = false, seed = null) {
   const taken = new Set();
   const per = groupIds.length <= 1 ? 5 : groupIds.length === 2 ? 3 : groupIds.length <= 4 ? 2 : 1;
   const items = [];
@@ -168,7 +179,10 @@ function generateWorkout(groupIds, rand = false) {
     let added = 0;
     for (let i = 0; added < per && i < def.patterns.length * 3; i++) {
       const pat = def.patterns[i % def.patterns.length];
-      const ex = pickForPattern(pat, taken, rand);
+      let variant = 0;
+      if (rand) variant = 'rand';
+      else if (seed !== null && !(added === 0 && CLASSIC_PATTERNS.has(pat))) variant = seed + added + i;
+      const ex = pickForPattern(pat, taken, variant);
       if (ex) { taken.add(ex.id); items.push({ exId: ex.id, sets: 3, reps: repsFor(pat, ex) }); added++; }
       else if (i >= def.patterns.length - 1 && !added && i >= def.patterns.length * 2) break;
     }
@@ -211,47 +225,46 @@ const WEEKLY_PRESETS = [
   },
 ];
 
+// What (if anything) does the plan schedule for a given date?
+// Returns { label, groups, seed } or null. The seed (days since the plan's
+// anchor) drives day-to-day exercise variation.
+function planForDate(ts) {
+  const p = S.plan;
+  if (!p || !p.enabled || (p.type !== 'weekly' && !p.groups?.length)) return null;
+  const diff = Math.round((dayStart(ts) - p.anchor) / 864e5);
+  if (diff < 0) return null;
+  if (p.type === 'weekly') {
+    const preset = WEEKLY_PRESETS.find(x => x.id === p.presetId) || WEEKLY_PRESETS[0];
+    const e = preset.pattern[diff % 7];
+    return e ? { label: e.label, groups: e.groups, seed: diff } : null;
+  }
+  if (diff % p.freq !== 0) return null;
+  const rotation = buildRotation(p.groups);
+  const groups = rotation[(diff / p.freq) % rotation.length];
+  return { label: groups.join(' & '), groups, seed: diff };
+}
+
 // What does the plan say about today? null when no active plan.
 function planInfo() {
   const p = S.plan;
   if (!p || !p.enabled || (p.type !== 'weekly' && !p.groups?.length)) return null;
   const today = dayStart(Date.now());
-  const diff = Math.round((today - p.anchor) / 864e5);
-  const doneToday = S.workouts.some(w => dayStart(w.start) === today);
-
-  if (p.type === 'weekly') {
-    const preset = WEEKLY_PRESETS.find(x => x.id === p.presetId) || WEEKLY_PRESETS[0];
-    const pat = preset.pattern;
-    const idx = ((diff % 7) + 7) % 7;
-    const entry = diff >= 0 ? pat[idx] : null;
-    let nextEntry = null, nextTs = today;
-    for (let d = 1; d <= 7; d++) {
-      const e = pat[((((diff < 0 ? -1 : diff) + d) % 7) + 7) % 7];
-      if (e) { nextEntry = e; nextTs = today + d * 864e5; break; }
-    }
-    return {
-      isDay: !!entry, doneToday,
-      todayGroups: entry ? entry.groups : null,
-      todayName: entry ? entry.label : null,
-      nextTs, nextName: nextEntry ? nextEntry.label : '',
-      freqLabel: preset.short,
-    };
+  const t = planForDate(today);
+  let next = null, nextTs = today;
+  for (let d = 1; d <= 28; d++) {
+    const e = planForDate(today + d * 864e5);
+    if (e) { next = e; nextTs = today + d * 864e5; break; }
   }
-
-  const rotation = buildRotation(p.groups);
-  const isDay = diff >= 0 && diff % p.freq === 0;
-  const slot = i => ((i % rotation.length) + rotation.length) % rotation.length;
-  const todayIdx = diff / p.freq;
-  const nextIdx = diff < 0 ? 0 : Math.floor(diff / p.freq) + 1;
-  const todayGroups = isDay ? rotation[slot(todayIdx)] : null;
-  const nextGroups = rotation[slot(nextIdx)];
+  const preset = WEEKLY_PRESETS.find(x => x.id === p.presetId) || WEEKLY_PRESETS[0];
   return {
-    isDay, doneToday,
-    todayGroups,
-    todayName: todayGroups ? todayGroups.join(' & ') : null,
-    nextTs: p.anchor + nextIdx * p.freq * 864e5,
-    nextName: nextGroups.join(' & '),
-    freqLabel: FREQ_LABELS[p.freq] || `every ${p.freq} days`,
+    isDay: !!t,
+    doneToday: S.workouts.some(w => dayStart(w.start) === today),
+    todayGroups: t ? t.groups : null,
+    todayName: t ? t.label : null,
+    seed: t ? t.seed : 0,
+    nextTs,
+    nextName: next ? next.label : '',
+    freqLabel: p.type === 'weekly' ? preset.short : (FREQ_LABELS[p.freq] || `every ${p.freq} days`),
   };
 }
 
@@ -785,7 +798,7 @@ function renderHome(v) {
   const prs = collectRecentPRs().slice(0, 4);
 
   const pi = planInfo();
-  const todayItems = pi?.isDay && !pi.doneToday ? generateWorkout(pi.todayGroups) : null;
+  const todayItems = pi?.isDay && !pi.doneToday ? generateWorkout(pi.todayGroups, false, pi.seed) : null;
   let planHtml;
   if (!pi) {
     planHtml = `
@@ -965,10 +978,11 @@ function renderCalendar(v) {
       for (let d = 1; d <= daysInMonth; d++) {
         const ts = new Date(y, mo, d).getTime();
         const wid = dayMap[ts];
-        const cls = ['cal-day', wid ? 'on' : '', ts === today ? 'today' : ''].filter(Boolean).join(' ');
-        cells += wid
-          ? `<button class="${cls}" data-cal-w="${wid}" title="${new Date(ts).toLocaleDateString()}"></button>`
-          : `<span class="${cls}"></span>`;
+        const planned = !wid && ts >= today ? planForDate(ts) : null;
+        const cls = ['cal-day', wid ? 'on' : '', planned ? 'plan' : '', ts === today ? 'today' : ''].filter(Boolean).join(' ');
+        if (wid) cells += `<button class="${cls}" data-cal-w="${wid}" title="${new Date(ts).toLocaleDateString()}"></button>`;
+        else if (planned) cells += `<button class="${cls}" data-cal-p="${ts}" title="${esc(planned.label)}"></button>`;
+        else cells += `<span class="${cls}"></span>`;
       }
       const isCurrent = y === thisYear && mo === now.getMonth();
       html += `
@@ -987,15 +1001,48 @@ function renderCalendar(v) {
       <h1>Calendar</h1>
       <span class="subtle">${yearCount} workout${yearCount === 1 ? '' : 's'} in ${thisYear}</span>
     </div>
-    <p class="subtle" style="margin-bottom:10px">Every day you trained lights up. Tap a day to see that workout.</p>
+    <p class="subtle" style="margin-bottom:10px">
+      <span class="cal-key on"></span> trained — tap to see that workout
+      ${S.plan?.enabled ? '<br><span class="cal-key plan"></span> planned — tap to preview that day\'s workout' : ''}
+    </p>
     ${html}`;
   v.querySelector('#cal-back').onclick = () => go('home');
   v.querySelectorAll('[data-cal-w]').forEach(b => b.onclick = () => openWorkoutDetail(b.dataset.calW));
+  v.querySelectorAll('[data-cal-p]').forEach(b => b.onclick = () => openPlannedDay(+b.dataset.calP));
   // Bring the current month into view (multi-year histories can get long)
   setTimeout(() => {
     const cur = document.getElementById('cal-current');
     if (cur && document.querySelectorAll('.cal-year').length > 1) cur.scrollIntoView({ block: 'center' });
   }, 0);
+}
+
+// Preview of a planned (future or today's) workout from the calendar.
+function openPlannedDay(ts) {
+  const plan = planForDate(ts);
+  if (!plan) return;
+  const items = generateWorkout(plan.groups, false, plan.seed);
+  const isToday = dayStart(ts) === dayStart(Date.now());
+  openModal(`
+    <div class="modal-head"><h2>${esc(plan.label)}</h2><button class="icon-btn" id="pd-x">✕</button></div>
+    <div class="modal-body">
+      <div class="subtle" style="margin-bottom:10px">${fmtDate(ts)} · planned workout, built from your equipment</div>
+      <div class="card">
+        ${items.map(i => {
+          const ex = EXERCISE_BY_ID[i.exId];
+          return `<div class="pr-row"><div class="grow"><b style="font-size:0.88rem">${esc(ex.name)}</b>
+            <div class="subtle">${i.sets} × ${esc(i.reps)} · ${esc(equipShort(ex))}</div></div></div>`;
+        }).join('') || '<div class="empty-state">No exercises available — add equipment in Profile.</div>'}
+      </div>
+      ${isToday
+        ? `<button class="btn primary block" id="pd-start" ${items.length ? '' : 'disabled'}>Start this workout</button>`
+        : '<p class="subtle center" style="margin-top:4px">The main lifts stay the same; accessories rotate from day to day.</p>'}
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#pd-x').onclick = closeModal;
+      const st = root.querySelector('#pd-start');
+      if (st) st.onclick = () => { closeModal(); startGenerated(plan.groups, items, plan.label); };
+    },
+  });
 }
 
 function openWorkoutDetail(id) {
