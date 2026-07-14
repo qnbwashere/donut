@@ -142,6 +142,58 @@ function resolveTemplateDay(day) {
   return { items, skipped };
 }
 
+// ===================== Assistance (bands, machine, partner) =====================
+// For rep-based exercises (chin-ups, dips, pistols...) a set can be marked as
+// assisted, recording what helped. Assisted sets never count as rep PRs.
+const ASSIST_OPTIONS = [
+  { id: 'Red band',     color: '#e34948' },
+  { id: 'Black band',   color: '#555550' },
+  { id: 'Purple band',  color: '#9085e9' },
+  { id: 'Green band',   color: '#0ca30c' },
+  { id: 'Blue band',    color: '#3987e5' },
+  { id: 'Orange band',  color: '#eb6834' },
+  { id: 'Yellow band',  color: '#eda100' },
+  { id: 'Machine assist', color: '#898781' },
+  { id: 'Partner assist', color: '#898781' },
+];
+function assistColor(name) {
+  const opt = ASSIST_OPTIONS.find(o => o.id === name);
+  return opt ? opt.color : '#898781';
+}
+function assistDot(name, size = 10) {
+  if (!name) return '';
+  return `<span class="band-dot" style="background:${assistColor(name)};width:${size}px;height:${size}px" title="${esc(name)}"></span>`;
+}
+
+function openAssistPicker(current, onPick) {
+  openModal(`
+    <div class="modal-head"><h2>Assistance</h2><button class="icon-btn" id="as-x">✕</button></div>
+    <div class="modal-body">
+      <p class="subtle" style="margin-bottom:10px">Mark this set as assisted and note what you used. Assisted sets don't count toward rep PRs.</p>
+      <button class="ex-row" data-as=""><span class="ex-avatar">✕</span><span class="grow"><b>No assistance</b></span>${current ? '' : '<span style="color:var(--accent);font-weight:800">✓</span>'}</button>
+      ${ASSIST_OPTIONS.map(o => `
+        <button class="ex-row" data-as="${esc(o.id)}">
+          <span class="ex-avatar" style="background:transparent">${assistDot(o.id, 18)}</span>
+          <span class="grow"><b>${esc(o.id)}</b></span>
+          ${current === o.id ? '<span style="color:var(--accent);font-weight:800">✓</span>' : ''}
+        </button>`).join('')}
+      <div class="row mt">
+        <input type="text" id="as-custom" placeholder="Custom (e.g. thin grey band)" value="${current && !ASSIST_OPTIONS.some(o => o.id === current) ? esc(current) : ''}">
+        <button class="btn sm primary" id="as-set">Set</button>
+      </div>
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#as-x').onclick = closeModal;
+      root.querySelectorAll('[data-as]').forEach(b => b.onclick = () => { closeModal(); onPick(b.dataset.as); });
+      root.querySelector('#as-set').onclick = () => {
+        const val = root.querySelector('#as-custom').value.trim();
+        if (!val) return;
+        closeModal(); onPick(val);
+      };
+    },
+  });
+}
+
 // ===================== Workout generator & training plan =====================
 // variant: undefined/0 = best available (the classic), 'rand' = random among
 // the top 3, a number = deterministic rotation among the top 4 — used to vary
@@ -430,7 +482,7 @@ function exerciseRecords(exId, beforeTs = Infinity) {
         if (wt > bestW) bestW = wt;
         const e = e1rm(wt, r);
         if (wt && e > bestE) bestE = e;
-        if (r > bestReps) bestReps = r;
+        if (r > bestReps && !st.assist) bestReps = r; // assisted reps don't set records
         if ((+st.time || 0) > bestTime) bestTime = +st.time || 0;
       }
     }
@@ -909,7 +961,7 @@ function collectRecentPRs() {
         if (!st.done) continue;
         const wt = +st.w || 0, r = +st.r || 0;
         if (ex.t === 'wr' && wt > prev.bestW && wt > 0) best = `${wt} ${unit()} × ${r} — new best weight`;
-        else if (ex.t === 'r' && r > prev.bestReps && r > 0) best = `${r} reps — new rep record`;
+        else if (ex.t === 'r' && r > prev.bestReps && r > 0 && !st.assist) best = `${r} reps — new rep record`;
       }
       if (best) out.push({ name: ex.name, detail: best, date: w.start });
     }
@@ -1081,7 +1133,7 @@ function openWorkoutDetail(id) {
 function setLabel(ex, s) {
   if (!ex) return '';
   if (ex.t === 't') return fmtClock(+s.time || 0) + ' min:sec';
-  if (ex.t === 'r' && !(+s.w)) return `${+s.r || 0} reps`;
+  if (ex.t === 'r' && !(+s.w)) return `${+s.r || 0} reps${s.assist ? ` ${assistDot(s.assist, 9)} ${esc(s.assist)}` : ''}`;
   return `${+s.w || 0} ${unit()} × ${+s.r || 0}`;
 }
 
@@ -1163,6 +1215,7 @@ function openExerciseDetail(exId) {
       if (en.exId !== exId) continue;
       for (const s of en.sets) {
         if (!s.done) continue;
+        if (ex.t === 'r' && s.assist) continue; // progress chart tracks unassisted reps
         const val = isWr ? e1rm(+s.w || 0, +s.r || 0) : (ex.t === 'r' ? (+s.r || 0) : (+s.time || 0));
         if (val > best) best = val;
       }
@@ -1434,10 +1487,11 @@ function makeEntry(exId, setCount = 3, reps = '') {
   for (let i = 0; i < setCount; i++) {
     const p = prev[i] || prev[prev.length - 1];
     sets.push({
-      // Pre-fill saved weights/reps from your last session so every set is
-      // one tap away — adjust only what changed.
+      // Pre-fill saved weights/reps (and assistance) from your last session so
+      // every set is one tap away — adjust only what changed.
       w: p ? p.w : '', r: p ? p.r : '', time: p ? p.time : '', done: false,
-      pw: p ? p.w : '', pr: p ? p.r : '', pt: p ? p.time : '',
+      assist: (p && p.assist) || '',
+      pw: p ? p.w : '', pr: p ? p.r : '', pt: p ? p.time : '', pa: (p && p.assist) || '',
       target: parseTargetReps(reps),
     });
   }
@@ -1494,6 +1548,7 @@ function entryCard(en, ei) {
   const ex = EXERCISE_BY_ID[en.exId];
   const isTime = ex.t === 't';
   const showW = ex.t === 'wr';
+  const canAssist = ex.t === 'r';
   return `
     <div class="card wx-card" data-entry="${ei}">
       <div class="wx-head">
@@ -1507,6 +1562,7 @@ function entryCard(en, ei) {
         <thead><tr>
           <th>Set</th><th>Prev</th>
           ${isTime ? '<th>Time (s)</th>' : `${showW ? `<th>${esc(unit())}</th>` : ''}<th>Reps</th>`}
+          ${canAssist ? '<th>Assist</th>' : ''}
           <th>✓</th>
         </tr></thead>
         <tbody>
@@ -1518,6 +1574,7 @@ function entryCard(en, ei) {
                 ? `<td><input type="number" inputmode="numeric" class="in-w" data-f="time" value="${esc(s.time)}" placeholder="${esc(s.pt || s.target || '60')}"></td>`
                 : `${showW ? `<td><input type="number" inputmode="decimal" class="in-w" data-f="w" value="${esc(s.w)}" placeholder="${esc(s.pw || '0')}"></td>` : ''}
                    <td><input type="number" inputmode="numeric" class="in-r" data-f="r" value="${esc(s.r)}" placeholder="${esc(s.pr || s.target || '0')}"></td>`}
+              ${canAssist ? `<td><button class="assist-btn ${s.assist ? 'has' : ''}" data-assist title="${esc(s.assist || 'No assistance')}">${s.assist ? assistDot(s.assist, 12) : '—'}</button></td>` : ''}
               <td><button class="set-check" data-check>✓</button></td>
             </tr>`).join('')}
         </tbody>
@@ -1536,7 +1593,7 @@ function lastTimeLine(en) {
   const parts = last.map(s =>
     ex.t === 't' ? fmtClock(+s.time || 0)
     : weighted ? `${+s.w || 0}×${+s.r || 0}`
-    : `${+s.r || 0}`);
+    : `${+s.r || 0}${s.assist ? 'ᴬ' : ''}`);
   const rec = exerciseRecords(en.exId, S.active ? S.active.start : Infinity);
   let best = '';
   if (ex.t === 'wr' && rec.bestW) best = ` · Best: ${rec.bestW} ${unit()}`;
@@ -1548,7 +1605,7 @@ function lastTimeLine(en) {
 
 function prevLabel(ex, s) {
   if (ex.t === 't') return s.pt ? fmtClock(+s.pt) : '—';
-  if (ex.t === 'r' && !s.pw) return s.pr ? `${s.pr} reps` : '—';
+  if (ex.t === 'r' && !s.pw) return s.pr ? `${s.pr} reps ${assistDot(s.pa, 8)}` : '—';
   return s.pw ? `${s.pw}×${s.pr}` : '—';
 }
 
@@ -1591,10 +1648,22 @@ function bindWorkoutEvents(v) {
     };
   });
 
+  v.querySelectorAll('[data-assist]').forEach(btn => {
+    btn.onclick = () => {
+      const ei = +btn.closest('[data-entry]').dataset.entry;
+      const si = +btn.closest('[data-set]').dataset.set;
+      const s = w.entries[ei].sets[si];
+      openAssistPicker(s.assist, val => {
+        s.assist = val;
+        save(); render();
+      });
+    };
+  });
+
   v.querySelectorAll('[data-addset]').forEach(b => b.onclick = () => {
     const en = w.entries[+b.dataset.addset];
     const lastSet = en.sets[en.sets.length - 1];
-    en.sets.push({ w: '', r: '', time: '', done: false, pw: lastSet?.pw || '', pr: lastSet?.pr || '', pt: lastSet?.pt || '', target: lastSet?.target || '' });
+    en.sets.push({ w: '', r: '', time: '', done: false, assist: lastSet?.assist || '', pw: lastSet?.pw || '', pr: lastSet?.pr || '', pt: lastSet?.pt || '', pa: lastSet?.pa || '', target: lastSet?.target || '' });
     save(); render();
   });
 
@@ -1638,7 +1707,7 @@ function maybePrToast(ex, s, beforeTs) {
   const prev = exerciseRecords(ex.id, beforeTs);
   const wt = +s.w || 0, r = +s.r || 0;
   if (ex.t === 'wr' && wt > 0 && wt > prev.bestW) toast(`🏆 New ${esc(ex.name)} PR: ${wt} ${esc(unit())}!`, 'pr');
-  else if (ex.t === 'r' && r > 0 && r > prev.bestReps) toast(`🏆 Rep PR on ${esc(ex.name)}: ${r} reps!`, 'pr');
+  else if (ex.t === 'r' && r > 0 && r > prev.bestReps && !s.assist) toast(`🏆 Rep PR on ${esc(ex.name)}: ${r} reps!`, 'pr');
 }
 
 function finishWorkout() {
@@ -1654,7 +1723,7 @@ function finishWorkout() {
     id: w.id, name: w.name.trim() || 'Workout', routineId: w.routineId,
     start: w.start, end: Date.now(),
     entries: w.entries
-      .map(en => ({ exId: en.exId, sets: en.sets.filter(s => s.done).map(s => ({ w: s.w, r: s.r, time: s.time, done: true })) }))
+      .map(en => ({ exId: en.exId, sets: en.sets.filter(s => s.done).map(s => ({ w: s.w, r: s.r, time: s.time, assist: s.assist || '', done: true })) }))
       .filter(en => en.sets.length),
   };
 
@@ -1665,7 +1734,7 @@ function finishWorkout() {
     const prev = exerciseRecords(en.exId, w.start);
     for (const s of en.sets) {
       const wt = +s.w || 0, r = +s.r || 0;
-      if ((ex.t === 'wr' && wt > prev.bestW && wt > 0) || (ex.t === 'r' && r > prev.bestReps && r > 0)) { prCount++; break; }
+      if ((ex.t === 'wr' && wt > prev.bestW && wt > 0) || (ex.t === 'r' && r > prev.bestReps && r > 0 && !s.assist)) { prCount++; break; }
     }
   }
 
