@@ -663,6 +663,7 @@ function render() {
     case 'profile': renderProfile(v); break;
     case 'workout': renderWorkout(v); break;
     case 'history': renderHistory(v); break;
+    case 'calendar': renderCalendar(v); break;
   }
   if (keepScroll) window.scrollTo(0, scrollY);
   else { v.scrollTop = 0; window.scrollTo(0, 0); }
@@ -831,6 +832,7 @@ function renderHome(v) {
         <h1>RepForge</h1>
         <div class="subtle">${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</div>
       </div>
+      <button class="icon-btn" id="home-calendar" title="Workout calendar">📅</button>
       <button class="icon-btn" id="home-settings" title="Settings">⚙</button>
     </div>
 
@@ -875,6 +877,7 @@ function renderHome(v) {
   if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems, pi.todayName);
   v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openGenerator([b.dataset.quick]));
   v.querySelector('#home-settings').onclick = () => go('profile');
+  v.querySelector('#home-calendar').onclick = () => go('calendar');
   const hist = v.querySelector('#see-history');
   if (hist) hist.onclick = () => go('history');
   bindHistoryCards(v);
@@ -928,10 +931,71 @@ function renderHistory(v) {
     <div class="view-header">
       <button class="icon-btn" id="hist-back">‹</button>
       <h1>History</h1>
+      <button class="icon-btn" id="hist-cal" title="Workout calendar">📅</button>
     </div>
     ${sorted.length ? sorted.map(w => historyCard(w)).join('') : '<div class="empty-state"><div class="big">📭</div>Nothing here yet.</div>'}`;
   v.querySelector('#hist-back').onclick = () => go('home');
+  v.querySelector('#hist-cal').onclick = () => go('calendar');
   bindHistoryCards(v);
+}
+
+// ===================== Calendar (yearly consistency view) =====================
+function renderCalendar(v) {
+  // Map of day-start timestamp -> first workout id that day
+  const dayMap = {};
+  for (const w of S.workouts) {
+    const k = dayStart(w.start);
+    if (!(k in dayMap)) dayMap[k] = w.id;
+  }
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const today = dayStart(Date.now());
+  const yearsWithData = S.workouts.map(w => new Date(w.start).getFullYear());
+  const firstYear = yearsWithData.length ? Math.min(...yearsWithData, thisYear) : thisYear;
+
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  let html = '';
+  for (let y = firstYear; y <= thisYear; y++) {
+    html += `<h1 class="cal-year">${y}</h1><div class="cal-months">`;
+    for (let mo = 0; mo < 12; mo++) {
+      const daysInMonth = new Date(y, mo + 1, 0).getDate();
+      const lead = (new Date(y, mo, 1).getDay() + 6) % 7; // Monday-first
+      let cells = '';
+      for (let i = 0; i < lead; i++) cells += '<span class="cal-day pad"></span>';
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ts = new Date(y, mo, d).getTime();
+        const wid = dayMap[ts];
+        const cls = ['cal-day', wid ? 'on' : '', ts === today ? 'today' : ''].filter(Boolean).join(' ');
+        cells += wid
+          ? `<button class="${cls}" data-cal-w="${wid}" title="${new Date(ts).toLocaleDateString()}"></button>`
+          : `<span class="${cls}"></span>`;
+      }
+      const isCurrent = y === thisYear && mo === now.getMonth();
+      html += `
+        <div class="cal-month" ${isCurrent ? 'id="cal-current"' : ''}>
+          <div class="cal-title">${MONTH_NAMES[mo]}</div>
+          <div class="cal-grid">${cells}</div>
+        </div>`;
+    }
+    html += '</div>';
+  }
+
+  const yearCount = S.workouts.filter(w => new Date(w.start).getFullYear() === thisYear).length;
+  v.innerHTML = `
+    <div class="view-header">
+      <button class="icon-btn" id="cal-back">‹</button>
+      <h1>Calendar</h1>
+      <span class="subtle">${yearCount} workout${yearCount === 1 ? '' : 's'} in ${thisYear}</span>
+    </div>
+    <p class="subtle" style="margin-bottom:10px">Every day you trained lights up. Tap a day to see that workout.</p>
+    ${html}`;
+  v.querySelector('#cal-back').onclick = () => go('home');
+  v.querySelectorAll('[data-cal-w]').forEach(b => b.onclick = () => openWorkoutDetail(b.dataset.calW));
+  // Bring the current month into view (multi-year histories can get long)
+  setTimeout(() => {
+    const cur = document.getElementById('cal-current');
+    if (cur && document.querySelectorAll('.cal-year').length > 1) cur.scrollIntoView({ block: 'center' });
+  }, 0);
 }
 
 function openWorkoutDetail(id) {
