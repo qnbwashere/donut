@@ -631,6 +631,7 @@ function barChart(container, bars, valueFmt) {
 
 // ===================== Router =====================
 let currentTab = 'home';
+let lastRenderedTab = null;
 function go(tab) {
   currentTab = tab;
   render();
@@ -638,10 +639,20 @@ function go(tab) {
 function render() {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
   const v = $('#view');
-  v.scrollTop = 0; window.scrollTo(0, 0);
+  // Re-rendering the screen you're already on (checking off a set, adding a
+  // set, ...) keeps your scroll position; only a real navigation jumps to top.
+  const keepScroll = lastRenderedTab === currentTab;
+  const scrollY = window.scrollY;
+  lastRenderedTab = currentTab;
   stopWorkoutClock();
 
-  if (!S.onboarded) { $('#tabbar').classList.add('hidden'); renderOnboarding(v); updateResumePill(); return; }
+  if (!S.onboarded) {
+    $('#tabbar').classList.add('hidden');
+    renderOnboarding(v);
+    if (!keepScroll) window.scrollTo(0, 0);
+    updateResumePill();
+    return;
+  }
   $('#tabbar').classList.remove('hidden');
 
   switch (currentTab) {
@@ -653,6 +664,8 @@ function render() {
     case 'workout': renderWorkout(v); break;
     case 'history': renderHistory(v); break;
   }
+  if (keepScroll) window.scrollTo(0, scrollY);
+  else { v.scrollTop = 0; window.scrollTo(0, 0); }
   updateResumePill();
 }
 
