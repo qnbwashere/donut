@@ -283,7 +283,12 @@ const WEEKLY_PRESETS = [
 function planForDate(ts) {
   const p = S.plan;
   if (!p || !p.enabled || (p.type !== 'weekly' && !p.groups?.length)) return null;
-  const diff = Math.round((dayStart(ts) - p.anchor) / 864e5);
+  const day = dayStart(ts);
+  // Overrides support moving a workout to another day: a date can point at a
+  // different schedule slot (its diff), or be forced to rest (-1).
+  const ov = p.overrides ? p.overrides[day] : undefined;
+  if (ov === -1) return null;
+  const diff = ov != null ? ov : Math.round((day - p.anchor) / 864e5);
   if (diff < 0) return null;
   if (p.type === 'weekly') {
     const preset = WEEKLY_PRESETS.find(x => x.id === p.presetId) || WEEKLY_PRESETS[0];
@@ -323,6 +328,25 @@ function planInfo() {
 function startGenerated(groups, items, name) {
   const entries = items.map(i => makeEntry(i.exId, i.sets, i.reps));
   startWorkout(name || groups.join(' & '), entries);
+}
+
+// Move a planned workout from a future date to today and start it; its
+// original day becomes a rest day, the rest of the schedule stays put.
+function pullWorkoutToToday(ts) {
+  const p = S.plan;
+  const plan = planForDate(ts);
+  if (!p || !plan) return;
+  const today = dayStart(Date.now());
+  const srcDay = dayStart(ts);
+  if (srcDay !== today) {
+    p.overrides = p.overrides || {};
+    for (const k of Object.keys(p.overrides)) if (+k < today - 45 * 864e5) delete p.overrides[k];
+    p.overrides[today] = plan.seed;
+    p.overrides[srcDay] = -1;
+    save();
+    toast(`Moved ${esc(plan.label)} to today — ${esc(fmtDate(srcDay))} is now a rest day`);
+  }
+  startGenerated(plan.groups, generateWorkout(plan.groups, false, plan.seed), plan.label);
 }
 
 // Plan setup / edit modal
@@ -888,6 +912,7 @@ function renderHome(v) {
             <div class="subtle">Next workout: ${esc(pi.nextName)} on ${fmtDate(pi.nextTs)}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
+        <button class="btn block mt" id="plan-pull">🔁 Busy ${fmtDate(pi.nextTs) === fmtDate(Date.now() + 864e5) ? 'tomorrow' : 'then'}? Do ${esc(pi.nextName)} today</button>
       </div>`;
   }
 
@@ -940,6 +965,8 @@ function renderHome(v) {
   if (planEdit) planEdit.onclick = openPlanEditor;
   const planStart = v.querySelector('#plan-start');
   if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems, pi.todayName);
+  const planPull = v.querySelector('#plan-pull');
+  if (planPull) planPull.onclick = () => openPlannedDay(pi.nextTs);
   v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openGenerator([b.dataset.quick]));
   v.querySelector('#home-settings').onclick = () => go('profile');
   v.querySelector('#home-calendar').onclick = () => go('calendar');
@@ -1087,12 +1114,15 @@ function openPlannedDay(ts) {
       </div>
       ${isToday
         ? `<button class="btn primary block" id="pd-start" ${items.length ? '' : 'disabled'}>Start this workout</button>`
-        : '<p class="subtle center" style="margin-top:4px">The main lifts stay the same; accessories rotate from day to day.</p>'}
+        : `<button class="btn primary block" id="pd-pull" ${items.length ? '' : 'disabled'}>🔁 Do this workout today instead</button>
+           <p class="subtle center" style="margin-top:8px">Moves it to today and makes ${fmtDate(ts)} a rest day. Main lifts stay the same; accessories rotate day to day.</p>`}
     </div>`, {
     onOpen(root) {
       root.querySelector('#pd-x').onclick = closeModal;
       const st = root.querySelector('#pd-start');
       if (st) st.onclick = () => { closeModal(); startGenerated(plan.groups, items, plan.label); };
+      const pull = root.querySelector('#pd-pull');
+      if (pull) pull.onclick = () => { closeModal(); pullWorkoutToToday(ts); };
     },
   });
 }
