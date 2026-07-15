@@ -1600,8 +1600,30 @@ function startWorkout(name, entries, routineId = null) {
   if (S.active) { go('workout'); return; }
   S.active = { id: uid(), name, routineId, start: Date.now(), entries };
   save();
+  acquireWakeLock();
   go('workout');
 }
+
+// ---- Screen wake lock: keep the screen on for the whole workout ----
+// The lock is auto-released by the OS when the app is backgrounded, so it's
+// re-acquired every time the app becomes visible while a workout is active.
+let wakeLock = null;
+window.__wakeLockOn = false;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator) || !S.active || document.visibilityState !== 'visible') return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    window.__wakeLockOn = true;
+    wakeLock.addEventListener('release', () => { wakeLock = null; window.__wakeLockOn = false; });
+  } catch (e) { /* low battery mode etc. — screen falls back to normal timeout */ }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  window.__wakeLockOn = false;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.active) acquireWakeLock();
+});
 
 // ===================== Active workout =====================
 let clockInt = null;
@@ -1635,7 +1657,7 @@ function renderWorkout(v) {
   });
   v.querySelector('#w-cancel').onclick = () =>
     confirmModal('Discard workout?', 'All sets from this session will be lost.', 'Discard', () => {
-      S.active = null; save(); stopRest(); go('home');
+      S.active = null; save(); stopRest(); releaseWakeLock(); go('home');
     });
   v.querySelector('#w-finish').onclick = finishWorkout;
 
@@ -1813,7 +1835,7 @@ function finishWorkout() {
   const doneSets = w.entries.reduce((n, en) => n + en.sets.filter(s => s.done).length, 0);
   if (!doneSets) {
     confirmModal('No sets completed', 'Check off at least one set, or discard the workout.', 'Discard workout', () => {
-      S.active = null; save(); stopRest(); go('home');
+      S.active = null; save(); stopRest(); releaseWakeLock(); go('home');
     });
     return;
   }
@@ -1838,7 +1860,7 @@ function finishWorkout() {
 
   S.workouts.push(finished);
   S.active = null;
-  save(); stopRest();
+  save(); stopRest(); releaseWakeLock();
 
   const vol = workoutVolume(finished);
   openModal(`
@@ -2089,6 +2111,7 @@ function renderProfile(v) {
 if (S.active && S.onboarded) currentTab = 'workout';
 render();
 resumeRestIfNeeded();
+acquireWakeLock();
 
 // If localStorage came up empty (cleared by the browser or a reinstall) but a
 // backup exists in IndexedDB, restore it.
