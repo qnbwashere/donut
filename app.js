@@ -1851,6 +1851,50 @@ document.addEventListener('visibilitychange', () => {
     else drawRest();
   }
 });
+// ---- Phone Clock-app timer bridge ----
+// The web can't program the Clock app silently, but it can hand off:
+// Android exposes the system SET_TIMER intent; iOS is reachable through a
+// user-created Apple Shortcut that starts a real Clock timer.
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+function phoneTimerUrl(sec) {
+  if (IS_IOS) return 'shortcuts://run-shortcut?name=Rest%20Timer&input=text&text=' + sec;
+  return 'intent:#Intent;action=android.intent.action.SET_TIMER;i.android.intent.extra.alarm.LENGTH=' + sec +
+    ';S.android.intent.extra.alarm.MESSAGE=RepForge%20rest;B.android.intent.extra.alarm.SKIP_UI=true;end';
+}
+function launchPhoneTimer() {
+  const left = restLeftSec();
+  if (left <= 0) return;
+  if (IS_IOS && !S.settings.iosShortcutReady) { openIosTimerHelp(); return; }
+  location.href = phoneTimerUrl(left);
+}
+function openIosTimerHelp() {
+  openModal(`
+    <div class="modal-head"><h2>⏰ Phone timer setup</h2><button class="icon-btn" id="ith-x">✕</button></div>
+    <div class="modal-body">
+      <p class="subtle" style="margin-bottom:10px">iPhones don't let apps set Clock timers directly — but Apple Shortcuts can. One-time setup (~30 seconds):</p>
+      <div class="card hist-sets">
+        <div>1. Open the <b>Shortcuts</b> app → tap <b>+</b></div>
+        <div>2. Name it exactly: <b>Rest Timer</b></div>
+        <div>3. Add the action <b>Start Timer</b> (from the Clock app)</div>
+        <div>4. Tap the duration → select <b>Shortcut Input</b>, unit <b>seconds</b></div>
+      </div>
+      <p class="subtle" style="margin:10px 0">After that, tapping ⏰ starts a real Clock timer for your remaining rest — it rings even if this app is closed.</p>
+      <button class="btn primary block" id="ith-done">I've set it up — start my timer</button>
+      <button class="btn ghost block mt" id="ith-later">Maybe later</button>
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#ith-x').onclick = closeModal;
+      root.querySelector('#ith-later').onclick = closeModal;
+      root.querySelector('#ith-done').onclick = () => {
+        S.settings.iosShortcutReady = true;
+        save(); closeModal();
+        launchPhoneTimer();
+      };
+    },
+  });
+}
+$('#rest-clock').onclick = launchPhoneTimer;
+
 $('#rest-skip').onclick = () => stopRest();
 $('#rest-plus').onclick = () => { restEnd += 15000; restTotal = Math.max(restTotal, restLeftSec()); persistRest(); drawRest(); };
 $('#rest-minus').onclick = () => { restEnd = Math.max(Date.now() + 1000, restEnd - 15000); persistRest(); drawRest(); };
