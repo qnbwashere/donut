@@ -13,6 +13,7 @@ const defaultState = () => ({
   workouts: [],
   active: null,
   plan: null, // { enabled, freq (days between workouts), groups: [muscle ids], anchor: day timestamp }
+  maxes: {},  // manually logged one-rep maxes: exId -> [{ w, ts }]
 });
 
 let S = load();
@@ -239,7 +240,27 @@ function generateWorkout(groupIds, rand = false, seed = null) {
       else if (i >= def.patterns.length - 1 && !added && i >= def.patterns.length * 2) break;
     }
   }
-  return items.slice(0, 8);
+  return ensureDumbbellCurl(items.slice(0, 8), rand, seed);
+}
+
+// House rule: biceps work always includes some sort of dumbbell curl (when
+// dumbbells are available). If no curl slot landed on one, the last curl slot
+// is swapped for a dumbbell curl variant.
+const DB_CURLS = ['db_curl', 'hammer_curl', 'incline_db_curl', 'concentration_curl', 'spider_curl', 'zottman_curl'];
+function ensureDumbbellCurl(items, rand, seed) {
+  const curlIdx = [];
+  items.forEach((it, i) => { if (EXERCISE_BY_ID[it.exId].p === 'curl') curlIdx.push(i); });
+  if (!curlIdx.length) return items;
+  if (items.some(it => DB_CURLS.includes(it.exId))) return items;
+  const inWorkout = new Set(items.map(it => it.exId));
+  const options = DB_CURLS.map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !inWorkout.has(ex.id));
+  if (!options.length) return items;
+  const pick = rand
+    ? options[Math.floor(Math.random() * Math.min(3, options.length))]
+    : options[(seed || 0) % Math.min(4, options.length)];
+  const i = curlIdx[curlIdx.length - 1];
+  items[i] = { exId: pick.id, sets: items[i].sets, reps: items[i].reps };
+  return items;
 }
 
 // Split the chosen groups into rotation days (paired in GROUP_DEFS order,
@@ -510,6 +531,13 @@ function exerciseRecords(exId, beforeTs = Infinity) {
         if ((+st.time || 0) > bestTime) bestTime = +st.time || 0;
       }
     }
+  }
+  // Manually logged one-rep maxes count toward records too
+  for (const m of (S.maxes && S.maxes[exId]) || []) {
+    if (m.ts >= beforeTs) continue;
+    const wt = +m.w || 0;
+    if (wt > bestW) bestW = wt;
+    if (wt > bestE) bestE = wt;
   }
   return { bestW, bestE, bestReps, bestTime };
 }
@@ -1237,8 +1265,8 @@ function openExerciseDetail(exId) {
   const rec = exerciseRecords(exId);
   const isWr = ex.t === 'wr';
 
-  // Best e1RM (or reps) per workout, oldest → newest
-  const points = [];
+  // Best e1RM (or reps) per workout, oldest → newest, plus manual 1RM entries
+  const raw = [];
   [...S.workouts].sort((a, b) => a.start - b.start).forEach(w => {
     let best = 0;
     for (const en of w.entries) {
@@ -1250,8 +1278,14 @@ function openExerciseDetail(exId) {
         if (val > best) best = val;
       }
     }
-    if (best > 0) points.push({ label: fmtDate(w.start), value: Math.round(best) });
+    if (best > 0) raw.push({ ts: w.start, value: Math.round(best) });
   });
+  const manual = (S.maxes && S.maxes[exId]) || [];
+  if (isWr) for (const m of manual) if (+m.w > 0) raw.push({ ts: m.ts, value: Math.round(+m.w) });
+  raw.sort((a, b) => a.ts - b.ts);
+  const points = raw.map(p => ({ label: fmtDate(p.ts), value: p.value }));
+
+  const todayIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 
   const last = lastPerformance(exId);
   openModal(`
@@ -1281,6 +1315,21 @@ function openExerciseDetail(exId) {
         <div class="chart-sub">Best set from each workout</div>
         <div id="exd-chart"></div>
       </div>
+      ${isWr ? `
+        <div class="section-label">One-rep max log</div>
+        <div class="card">
+          ${manual.length ? [...manual].sort((a, b) => b.ts - a.ts).map((m, mi) => `
+            <div class="pr-row"><span class="medal">🎯</span>
+              <div class="grow"><b style="font-size:0.9rem">${esc(String(+m.w))} ${esc(unit())}</b></div>
+              <span class="subtle">${fmtDate(m.ts)}</span>
+              <button class="icon-btn" data-delm="${m.ts}-${esc(String(m.w))}" style="width:28px;height:28px">✕</button>
+            </div>`).join('') : '<p class="subtle">Tested a max outside a workout? Log it here — it counts toward your records and chart.</p>'}
+          <div class="row mt">
+            <input type="number" inputmode="decimal" id="orm-w" placeholder="${esc(unit())}" style="flex:1">
+            <input type="date" id="orm-d" value="${todayIso}" style="flex:1.4">
+            <button class="btn sm primary" id="orm-add">Add 1RM</button>
+          </div>
+        </div>` : ''}
       ${last ? `<div class="section-label">Last time</div><div class="card hist-sets">
         ${last.map((s, i) => `<div>Set ${i + 1}: <b>${setLabel(ex, s)}</b></div>`).join('')}
       </div>` : ''}
@@ -1289,6 +1338,25 @@ function openExerciseDetail(exId) {
       root.querySelector('#exd-x').onclick = closeModal;
       lineChart(root.querySelector('#exd-chart'), points,
         x => isWr ? `${x} ${unit()}` : ex.t === 'r' ? `${x} reps` : fmtClock(x));
+      const add = root.querySelector('#orm-add');
+      if (add) add.onclick = () => {
+        const w = +root.querySelector('#orm-w').value;
+        if (!(w > 0)) { toast('Enter a weight first'); return; }
+        const dval = root.querySelector('#orm-d').value;
+        const parts = dval ? dval.split('-').map(Number) : null;
+        const ts = parts && parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2], 12).getTime() : Date.now();
+        if (!S.maxes) S.maxes = {};
+        (S.maxes[exId] = S.maxes[exId] || []).push({ w, ts });
+        save();
+        toast(`🎯 1RM logged: ${w} ${esc(unit())}`);
+        openExerciseDetail(exId);
+      };
+      root.querySelectorAll('[data-delm]').forEach(b => b.onclick = () => {
+        const [ts, w] = b.dataset.delm.split('-');
+        S.maxes[exId] = (S.maxes[exId] || []).filter(m => !(String(m.ts) === ts && String(m.w) === w));
+        save();
+        openExerciseDetail(exId);
+      });
     },
   });
 }
