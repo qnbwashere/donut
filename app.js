@@ -2084,6 +2084,9 @@ function renderProfile(v) {
 }
 
 // ===================== Boot =====================
+// Reopening mid-workout drops you straight back into the active workout —
+// everything (sets, weights, the clock, the rest timer) is saved on every tap.
+if (S.active && S.onboarded) currentTab = 'workout';
 render();
 resumeRestIfNeeded();
 
