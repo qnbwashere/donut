@@ -1955,12 +1955,25 @@ function notifyRestOver() {
 // the tray reminding you not to kill it. It self-cleans when you come back.
 function showSwipeGuard() {
   if (!S.settings.notify || !notificationsSupported() || Notification.permission !== 'granted') return;
-  if (!S.active) return;
+  let title, body;
+  if (S.active) {
+    title = '💪 Workout in progress — don\'t swipe me!';
+    body = restEnd
+      ? 'Your rest timer can\'t ring if the app is swiped away. Tap to jump back in (or use ⏰ for a Clock timer).'
+      : 'Swiping the app away stops the rest alarms and screen wake lock. Tap to jump back into your workout.';
+  } else {
+    const pi = planInfo();
+    if (pi && pi.isDay && !pi.doneToday) {
+      title = '🏋️ RepForge';
+      body = `Today's ${pi.todayName} workout is still waiting — tap to start it.`;
+    } else {
+      title = '🏋️ RepForge';
+      body = 'Tap to jump back into your training.';
+    }
+  }
   navigator.serviceWorker.ready.then(reg =>
-    reg.showNotification('💪 Workout in progress — don\'t swipe me!', {
-      body: restEnd
-        ? 'Your rest timer can\'t ring if the app is swiped away. Tap to jump back in (or use ⏰ for a Clock timer).'
-        : 'Swiping the app away stops the rest alarms and screen wake lock. Tap to jump back into your workout.',
+    reg.showNotification(title, {
+      body,
       icon: 'icon-192.png',
       badge: 'icon-192.png',
       tag: 'repforge-guard',
