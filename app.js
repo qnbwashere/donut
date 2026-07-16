@@ -8,7 +8,7 @@ const defaultState = () => ({
   ver: 1,
   onboarded: false,
   equipment: [],
-  settings: { unit: 'lb', restSec: 90 },
+  settings: { unit: 'lb', restSec: 90, notify: false },
   routines: [],
   workouts: [],
   active: null,
@@ -1889,7 +1889,7 @@ function finishWorkout() {
 // Wall-clock based: the end time is a real timestamp, so the countdown stays
 // correct while the app is backgrounded (where JS timers are throttled) and
 // even survives closing and reopening the app mid-rest.
-let restInt = null, restEnd = 0, restTotal = 0;
+let restInt = null, restTimeout = null, restEnd = 0, restTotal = 0;
 
 function restLeftSec() { return Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)); }
 
@@ -1908,6 +1908,9 @@ function startRest(sec, endTs) {
     if (restLeftSec() <= 0) { restDone(); return; }
     drawRest();
   }, 250);
+  // Exact-time fallback: in the background the interval is throttled, but a
+  // one-shot timer at the precise end often still fires (posts the notification).
+  restTimeout = setTimeout(() => { if (restEnd && restLeftSec() <= 0) restDone(); }, restEnd - Date.now() + 50);
 }
 function drawRest() {
   const left = restLeftSec();
@@ -1916,7 +1919,8 @@ function drawRest() {
 }
 function stopRest(clearPersist = true) {
   if (restInt) clearInterval(restInt);
-  restInt = null;
+  if (restTimeout) clearTimeout(restTimeout);
+  restInt = null; restTimeout = null;
   restEnd = 0;
   $('#rest-banner').classList.add('hidden');
   if (clearPersist && S.active && S.active.restEnd) { S.active.restEnd = 0; save(); }
@@ -1926,6 +1930,38 @@ function restDone() {
   beep();
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   toast('⏰ Rest over — next set!');
+  notifyRestOver();
+}
+
+// ---- System notifications (home-screen app) ----
+function notificationsSupported() {
+  return 'Notification' in window && 'serviceWorker' in navigator;
+}
+function notifyRestOver() {
+  if (!S.settings.notify || !notificationsSupported() || Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible') return; // in-app toast/beep already covers it
+  navigator.serviceWorker.ready.then(reg =>
+    reg.showNotification('⏰ Rest over — next set!', {
+      body: S.active ? S.active.name : 'RepForge',
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: 'repforge-rest',
+      vibrate: [200, 100, 200],
+    })
+  ).catch(() => {});
+}
+async function enableNotifications() {
+  if (!notificationsSupported()) {
+    toast('Notifications aren\'t supported here — on iPhone, use the app from your home screen (iOS 16.4+).');
+    return false;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    toast('Notifications are blocked — allow them for this app in your phone settings.');
+    return false;
+  }
+  return true;
 }
 // Pick the rest timer back up after a reload / reopen mid-rest.
 function resumeRestIfNeeded() {
@@ -2045,6 +2081,12 @@ function renderProfile(v) {
           ${[60, 90, 120, 180].map(s => `<button class="chip ${S.settings.restSec === s ? 'active' : ''}" data-rest="${s}">${fmtClock(s)}</button>`).join(' ')}
         </div>
       </div>
+      <div class="divider"></div>
+      <div class="row" style="justify-content:space-between">
+        <div><span>Rest notifications</span>
+          <div class="subtle" style="font-size:0.75rem">Pings you when rest is over and you're in another app</div></div>
+        <button class="chip ${S.settings.notify ? 'active' : ''}" id="notif-toggle">${S.settings.notify ? 'On' : 'Off'}</button>
+      </div>
     </div>
 
     <div class="section-label">Data</div>
@@ -2063,6 +2105,14 @@ function renderProfile(v) {
   });
 
   v.querySelector('#prof-plan').onclick = openPlanEditor;
+  v.querySelector('#notif-toggle').onclick = async () => {
+    if (S.settings.notify) { S.settings.notify = false; save(); render(); return; }
+    if (await enableNotifications()) {
+      S.settings.notify = true;
+      save(); render();
+      toast('🔔 Rest notifications on');
+    }
+  };
   v.querySelectorAll('[data-unit]').forEach(b => b.onclick = () => {
     S.settings.unit = b.dataset.unit; save(); render();
   });
