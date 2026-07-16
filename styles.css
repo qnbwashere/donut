@@ -240,6 +240,18 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .rate-bar span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .rate-v { width: 42px; flex: none; text-align: right; font-size: 0.78rem; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
+/* ---------- Suggested working weights ---------- */
+.rec-card.flash { animation: recFlash 1.2s ease-out; }
+@keyframes recFlash {
+  0%, 100% { border-color: var(--border); }
+  30% { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-soft); }
+}
+.rec-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.rec-reps { width: 62px; flex: none; font-size: 0.86rem; font-weight: 600; }
+.rec-bar { flex: 1; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; display: block; }
+.rec-bar span { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+.rec-w { width: 74px; flex: none; text-align: right; font-size: 0.92rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
 /* ---------- Active workout ---------- */
 .workout-topbar {
   position: sticky; top: 0; z-index: 30;
