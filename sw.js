@@ -1,6 +1,6 @@
 // RepForge service worker — precache the app shell, serve stale-while-revalidate
 // so the app works offline but still picks up new deploys on the next visit.
-const CACHE = 'repforge-v17';
+const CACHE = 'repforge-v18';
 const SHELL = [
   './',
   './index.html',
@@ -21,6 +21,16 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) if ('focus' in c) return c.focus();
+      return self.clients.openWindow('./');
+    })
   );
 });
 
