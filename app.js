@@ -14,6 +14,7 @@ const defaultState = () => ({
   active: null,
   plan: null, // { enabled, freq (days between workouts), groups: [muscle ids], anchor: day timestamp }
   maxes: {},  // manually logged one-rep maxes: exId -> [{ w, ts }]
+  habits: null, // daily habits: { items: [{id, name, emoji, time}], log: { id: { 'YYYY-MM-DD': 1 } } }
 });
 
 let S = load();
@@ -274,6 +275,128 @@ function buildRotation(groupIds) {
 }
 
 function dayStart(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+
+// ===================== Daily habits (creatine etc.) =====================
+function dateKey(ts = Date.now()) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function defaultHabits() {
+  return { items: [{ id: uid(), name: 'Creatine', emoji: '💊', time: '21:00' }], log: {} };
+}
+function habitDone(id, key = dateKey()) {
+  return !!(S.habits && S.habits.log[id] && S.habits.log[id][key]);
+}
+function toggleHabit(id, key = dateKey()) {
+  if (!S.habits) return;
+  const log = (S.habits.log[id] = S.habits.log[id] || {});
+  if (log[key]) delete log[key]; else log[key] = 1;
+  save();
+}
+function habitStreak(id) {
+  if (!S.habits) return 0;
+  let streak = 0;
+  let ts = dayStart(Date.now());
+  // If today isn't done yet, don't break the streak — count back from yesterday.
+  if (!habitDone(id, dateKey(ts))) ts -= 864e5;
+  while (habitDone(id, dateKey(ts))) { streak++; ts -= 864e5; }
+  return streak;
+}
+// Habits whose reminder time has passed today and that aren't checked off yet.
+function habitsDueNow() {
+  if (!S.habits || !S.habits.items.length) return [];
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return S.habits.items.filter(h => {
+    const [hh, mm] = (h.time || '21:00').split(':').map(Number);
+    return mins >= hh * 60 + mm && !habitDone(h.id);
+  });
+}
+
+const HABIT_EMOJI = ['💊', '🥤', '💧', '🌙', '☀️', '🧘', '🏃', '🥗', '📖', '💤'];
+function openHabitAdd() {
+  let emoji = '💊';
+  openModal(`
+    <div class="modal-head"><h2>Add a daily habit</h2><button class="icon-btn" id="ha-x">✕</button></div>
+    <div class="modal-body">
+      <input type="text" id="ha-name" placeholder="Habit name (e.g. Vitamin D)" style="margin-bottom:10px">
+      <div class="section-label" style="margin-top:0">Icon</div>
+      <div class="chip-row" id="ha-emoji">
+        ${HABIT_EMOJI.map((e, i) => `<button class="chip ${i === 0 ? 'active' : ''}" data-e="${e}" style="font-size:1.1rem">${e}</button>`).join('')}
+      </div>
+      <div class="row mt" style="justify-content:space-between;align-items:center">
+        <span>Reminder time</span>
+        <input type="time" id="ha-time" value="21:00" style="width:118px">
+      </div>
+      <button class="btn primary block mt" id="ha-save">Add habit</button>
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#ha-x').onclick = closeModal;
+      root.querySelectorAll('#ha-emoji [data-e]').forEach(b => b.onclick = () => {
+        emoji = b.dataset.e;
+        root.querySelectorAll('#ha-emoji .chip').forEach(c => c.classList.toggle('active', c === b));
+      });
+      root.querySelector('#ha-save').onclick = () => {
+        const name = root.querySelector('#ha-name').value.trim();
+        if (!name) { toast('Give it a name first'); return; }
+        if (!S.habits) S.habits = { items: [], log: {} };
+        S.habits.items.push({ id: uid(), name, emoji, time: root.querySelector('#ha-time').value || '21:00' });
+        save(); closeModal(); render();
+        toast(`${emoji} ${esc(name)} added`);
+      };
+    },
+  });
+}
+
+// Set a REAL recurring alarm in the phone's Clock app — the reliable way to be
+// reminded when the app is closed. Android opens the alarm pre-filled; iOS gets
+// a quick manual guide (no alarm URL scheme exists).
+function setupNightlyAlarm() {
+  const items = (S.habits && S.habits.items) || [];
+  if (!items.length) return;
+  if (items.length === 1) { launchHabitAlarm(items[0]); return; }
+  openModal(`
+    <div class="modal-head"><h2>⏰ Which reminder?</h2><button class="icon-btn" id="al-x">✕</button></div>
+    <div class="modal-body">
+      <p class="subtle" style="margin-bottom:10px">Pick a habit to set an alarm for in your phone's Clock app.</p>
+      ${items.map(h => `<button class="ex-row" data-halarm="${h.id}"><span class="ex-avatar" style="background:transparent">${h.emoji}</span><span class="grow"><b>${esc(h.name)}</b><small>${esc(h.time || '21:00')}</small></span><span style="color:var(--ink-3)">›</span></button>`).join('')}
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#al-x').onclick = closeModal;
+      root.querySelectorAll('[data-halarm]').forEach(b => b.onclick = () => {
+        const h = items.find(x => x.id === b.dataset.halarm);
+        closeModal(); launchHabitAlarm(h);
+      });
+    },
+  });
+}
+function launchHabitAlarm(h) {
+  const [hh, mm] = (h.time || '21:00').split(':').map(Number);
+  if (IS_IOS) { openIosAlarmHelp(h); return; }
+  const msg = encodeURIComponent(h.name);
+  location.href = `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${hh};i.android.intent.extra.alarm.MINUTES=${mm};S.android.intent.extra.alarm.MESSAGE=${msg};B.android.intent.extra.alarm.SKIP_UI=false;end`;
+}
+function openIosAlarmHelp(h) {
+  const t = h.time || '21:00';
+  openModal(`
+    <div class="modal-head"><h2>⏰ Nightly ${esc(h.name)} alarm</h2><button class="icon-btn" id="ia-x">✕</button></div>
+    <div class="modal-body">
+      <p class="subtle" style="margin-bottom:10px">iPhones don't let apps create alarms directly, but it's 20 seconds by hand and it repeats forever:</p>
+      <div class="card hist-sets">
+        <div>1. Open the <b>Clock</b> app → <b>Alarms</b> → tap <b>+</b></div>
+        <div>2. Set the time to <b>${esc(t)}</b></div>
+        <div>3. Tap <b>Repeat</b> → choose <b>Every Day</b></div>
+        <div>4. Tap <b>Label</b> → type <b>${esc(h.name)}</b> → <b>Save</b></div>
+      </div>
+      <p class="subtle" style="margin-top:10px">That alarm rings every night whether or not this app is open — nothing can stop it.</p>
+      <button class="btn primary block mt" id="ia-done">Got it</button>
+    </div>`, {
+    onOpen(root) {
+      root.querySelector('#ia-x').onclick = closeModal;
+      root.querySelector('#ia-done').onclick = closeModal;
+    },
+  });
+}
 
 const FREQ_LABELS = { 1: 'every day', 2: 'every other day', 3: 'every 3rd day' };
 
@@ -944,6 +1067,28 @@ function renderHome(v) {
       </div>`;
   }
 
+  let habitsHtml = '';
+  if (S.habits && S.habits.items.length) {
+    const tk = dateKey();
+    habitsHtml = `
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Daily habits</span>
+        <button class="btn ghost sm" id="habits-manage">Manage ›</button>
+      </div>
+      <div class="card">
+        ${S.habits.items.map(h => {
+          const done = habitDone(h.id, tk);
+          const st = habitStreak(h.id);
+          return `<button class="habit-row" data-habit="${h.id}">
+            <span class="habit-check ${done ? 'done' : ''}">${done ? '✓' : ''}</span>
+            <span class="grow"><b>${h.emoji} ${esc(h.name)}</b>
+              <div class="subtle">${done ? 'Done today 🎉' : 'Tap to mark done'}${st ? ` · ${st}🔥 day streak` : ''}</div></span>
+            <span class="subtle">${esc(h.time || '')}</span>
+          </button>`;
+        }).join('')}
+      </div>`;
+  }
+
   v.innerHTML = `
     <div class="view-header">
       <div>
@@ -961,6 +1106,8 @@ function renderHome(v) {
       <div class="stat-tile"><div class="stat-value">${fmtNum(weekVol)}</div><div class="stat-label">${esc(unit())} lifted this week</div></div>
       <div class="stat-tile"><div class="stat-value">${streak}🔥</div><div class="stat-label">Week streak</div></div>
     </div>
+
+    ${habitsHtml}
 
     <div class="section-label">Quick workout — tap what you want to train</div>
     <div class="chip-row">
@@ -1000,6 +1147,16 @@ function renderHome(v) {
   v.querySelector('#home-calendar').onclick = () => go('calendar');
   const hist = v.querySelector('#see-history');
   if (hist) hist.onclick = () => go('history');
+  v.querySelectorAll('[data-habit]').forEach(b => b.onclick = () => {
+    const id = b.dataset.habit;
+    const wasDone = habitDone(id);
+    toggleHabit(id);
+    if (!wasDone) { const h = S.habits.items.find(x => x.id === id); toast(`${h.emoji} ${esc(h.name)} — nice! ${habitStreak(id)}🔥`); }
+    closeSwipeGuard();
+    render();
+  });
+  const hm = v.querySelector('#habits-manage');
+  if (hm) hm.onclick = () => go('profile');
   bindHistoryCards(v);
 }
 
@@ -1963,7 +2120,14 @@ function showSwipeGuard() {
       : 'Swiping the app away stops the rest alarms and screen wake lock. Tap to jump back into your workout.';
   } else {
     const pi = planInfo();
-    if (pi && pi.isDay && !pi.doneToday) {
+    const due = habitsDueNow();
+    if (due.length) {
+      const h = due[0];
+      title = `${h.emoji} Don't forget your ${h.name.toLowerCase()}`;
+      body = due.length > 1
+        ? `${h.name} and ${due.length - 1} more habit${due.length > 2 ? 's' : ''} still to check off today — tap to log.`
+        : `Tap to mark today's ${h.name.toLowerCase()} done and keep your streak alive.`;
+    } else if (pi && pi.isDay && !pi.doneToday) {
       title = '🏋️ RepForge';
       body = `Today's ${pi.todayName} workout is still waiting — tap to start it.`;
     } else {
@@ -2107,6 +2271,24 @@ function renderProfile(v) {
       </div>
     </div>
 
+    <div class="section-label">Daily reminders</div>
+    <div class="card">
+      ${S.habits && S.habits.items.length ? `
+        ${S.habits.items.map(h => `
+          <div class="row habit-manage" data-hm="${h.id}" style="gap:8px;padding:6px 0">
+            <span class="grow"><b style="font-size:0.9rem">${h.emoji} ${esc(h.name)}</b></span>
+            <input type="time" value="${esc(h.time || '21:00')}" data-htime="${h.id}" style="width:118px">
+            <button class="icon-btn" data-hdel="${h.id}" title="Remove">✕</button>
+          </div>`).join('')}
+        <button class="btn sm block mt" id="habit-add">+ Add a habit</button>
+        <button class="btn sm block mt" id="habit-alarm">⏰ Set a nightly alarm in my phone's Clock app</button>
+        <p class="subtle" style="font-size:0.75rem;margin-top:8px">The in-app checklist works offline. For a ping that fires with the app closed, the phone's own alarm is the reliable way — this sets one up.</p>
+      ` : `
+        <p class="subtle" style="margin-bottom:10px">Track a nightly habit like creatine — check it off each day, build a streak, and get reminded.</p>
+        <button class="btn primary block" id="habit-enable">💊 Track creatine &amp; daily habits</button>
+      `}
+    </div>
+
     <div class="section-label">Settings</div>
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -2148,6 +2330,27 @@ function renderProfile(v) {
   });
 
   v.querySelector('#prof-plan').onclick = openPlanEditor;
+
+  const habEnable = v.querySelector('#habit-enable');
+  if (habEnable) habEnable.onclick = () => { S.habits = defaultHabits(); save(); render(); toast('💊 Daily habits on — check them off on Home'); };
+  const habAdd = v.querySelector('#habit-add');
+  if (habAdd) habAdd.onclick = () => openHabitAdd();
+  v.querySelectorAll('[data-htime]').forEach(inp => inp.onchange = () => {
+    const h = S.habits.items.find(x => x.id === inp.dataset.htime);
+    if (h) { h.time = inp.value || '21:00'; save(); }
+  });
+  v.querySelectorAll('[data-hdel]').forEach(b => b.onclick = () => {
+    const h = S.habits.items.find(x => x.id === b.dataset.hdel);
+    confirmModal('Remove habit?', `"${h ? h.name : ''}" and its streak history will be removed.`, 'Remove', () => {
+      S.habits.items = S.habits.items.filter(x => x.id !== b.dataset.hdel);
+      delete S.habits.log[b.dataset.hdel];
+      if (!S.habits.items.length) S.habits = null;
+      save(); render();
+    });
+  });
+  const habAlarm = v.querySelector('#habit-alarm');
+  if (habAlarm) habAlarm.onclick = () => setupNightlyAlarm();
+
   v.querySelector('#notif-toggle').onclick = async () => {
     if (S.settings.notify) { S.settings.notify = false; save(); render(); return; }
     if (await enableNotifications()) {
@@ -2222,6 +2425,12 @@ if (S.active && S.onboarded) currentTab = 'workout';
 render();
 resumeRestIfNeeded();
 acquireWakeLock();
+
+// Evening nudge: opening the app after a habit's reminder time, still unchecked.
+if (S.onboarded && currentTab === 'home') {
+  const due = habitsDueNow();
+  if (due.length) setTimeout(() => toast(`${due[0].emoji} Reminder: ${due[0].name} not logged yet today`), 900);
+}
 
 // If localStorage came up empty (cleared by the browser or a reinstall) but a
 // backup exists in IndexedDB, restore it.
