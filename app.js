@@ -637,6 +637,19 @@ function openGenerator(preselect = []) {
 // ===================== History / PR helpers =====================
 function e1rm(w, r) { return r > 0 ? w * (1 + r / 30) : w; }
 
+// Round a weight to the nearest loadable increment (5 lb / 2.5 kg).
+function roundLoad(w) {
+  const inc = unit() === 'kg' ? 2.5 : 5;
+  return Math.round(w / inc) * inc;
+}
+// Suggested working weights for common rep ranges from a one-rep max, using a
+// standard %1RM chart. Returns [{ reps, pct, weight }].
+const RM_PCT = [[3, 90], [5, 85], [8, 78], [10, 73], [12, 68]];
+function workingWeights(oneRM) {
+  if (!(oneRM > 0)) return [];
+  return RM_PCT.map(([reps, pct]) => ({ reps, pct, weight: roundLoad(oneRM * pct / 100) }));
+}
+
 // Per-exercise records from completed workouts (optionally before a timestamp).
 function exerciseRecords(exId, beforeTs = Infinity) {
   let bestW = 0, bestE = 0, bestReps = 0, bestTime = 0;
@@ -1417,7 +1430,7 @@ function exRowHtml(ex, extra = '') {
     </button>`;
 }
 
-function openExerciseDetail(exId) {
+function openExerciseDetail(exId, flashRecs = false) {
   const ex = EXERCISE_BY_ID[exId];
   const rec = exerciseRecords(exId);
   const isWr = ex.t === 'wr';
@@ -1487,6 +1500,23 @@ function openExerciseDetail(exId) {
             <button class="btn sm primary" id="orm-add">Add 1RM</button>
           </div>
         </div>` : ''}
+      ${(() => {
+        const oneRM = Math.round(rec.bestE || rec.bestW || 0);
+        const recs = isWr ? workingWeights(oneRM) : [];
+        if (!recs.length) return '';
+        return `
+        <div class="section-label">Suggested working weights 💡</div>
+        <div class="card rec-card ${flashRecs ? 'flash' : ''}" id="rec-card">
+          <p class="subtle" style="margin-bottom:8px">Based on your ${oneRM} ${esc(unit())} max — target weights for each rep range:</p>
+          ${recs.map(r => `
+            <div class="rec-row">
+              <span class="rec-reps">${r.reps} reps</span>
+              <span class="rec-bar"><span style="width:${r.pct}%"></span></span>
+              <span class="rec-w">${r.weight} ${esc(unit())}</span>
+            </div>`).join('')}
+          <p class="subtle" style="font-size:0.72rem;margin-top:8px">Estimates from a standard %1RM chart — start on the lighter side and adjust to how the bar moves.</p>
+        </div>`;
+      })()}
       ${last ? `<div class="section-label">Last time</div><div class="card hist-sets">
         ${last.map((s, i) => `<div>Set ${i + 1}: <b>${setLabel(ex, s)}</b></div>`).join('')}
       </div>` : ''}
@@ -1505,8 +1535,9 @@ function openExerciseDetail(exId) {
         if (!S.maxes) S.maxes = {};
         (S.maxes[exId] = S.maxes[exId] || []).push({ w, ts });
         save();
-        toast(`🎯 1RM logged: ${w} ${esc(unit())}`);
-        openExerciseDetail(exId);
+        toast(`🎯 New max! Here's what to lift next 👇`, 'pr');
+        openExerciseDetail(exId, true);
+        setTimeout(() => { const c = $('#rec-card'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
       };
       root.querySelectorAll('[data-delm]').forEach(b => b.onclick = () => {
         const [ts, w] = b.dataset.delm.split('-');
