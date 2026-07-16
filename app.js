@@ -2087,6 +2087,7 @@ function renderProfile(v) {
           <div class="subtle" style="font-size:0.75rem">Pings you when rest is over and you're in another app</div></div>
         <button class="chip ${S.settings.notify ? 'active' : ''}" id="notif-toggle">${S.settings.notify ? 'On' : 'Off'}</button>
       </div>
+      <button class="btn sm block mt" id="notif-test">🔔 Test — close the app, notification in 5s</button>
     </div>
 
     <div class="section-label">Data</div>
@@ -2112,6 +2113,23 @@ function renderProfile(v) {
       save(); render();
       toast('🔔 Rest notifications on');
     }
+  };
+  v.querySelector('#notif-test').onclick = async () => {
+    if (!(await enableNotifications())) return;
+    toast('🔔 Close the app now — test notification in 5 seconds…');
+    setTimeout(() => {
+      navigator.serviceWorker.ready.then(reg =>
+        reg.showNotification('🔔 Test notification', {
+          body: document.visibilityState === 'visible'
+            ? 'Notifications work! (Next time close the app first to test the real scenario.)'
+            : 'It works — you\'ll get pinged like this when rest is over.',
+          icon: 'icon-192.png',
+          badge: 'icon-192.png',
+          tag: 'repforge-test',
+          vibrate: [200, 100, 200],
+        })
+      ).catch(() => {});
+    }, 5000);
   };
   v.querySelectorAll('[data-unit]').forEach(b => b.onclick = () => {
     S.settings.unit = b.dataset.unit; save(); render();
