@@ -1657,7 +1657,7 @@ function renderWorkout(v) {
   });
   v.querySelector('#w-cancel').onclick = () =>
     confirmModal('Discard workout?', 'All sets from this session will be lost.', 'Discard', () => {
-      S.active = null; save(); stopRest(); releaseWakeLock(); go('home');
+      S.active = null; save(); stopRest(); releaseWakeLock(); closeSwipeGuard(); go('home');
     });
   v.querySelector('#w-finish').onclick = finishWorkout;
 
@@ -1835,7 +1835,7 @@ function finishWorkout() {
   const doneSets = w.entries.reduce((n, en) => n + en.sets.filter(s => s.done).length, 0);
   if (!doneSets) {
     confirmModal('No sets completed', 'Check off at least one set, or discard the workout.', 'Discard workout', () => {
-      S.active = null; save(); stopRest(); releaseWakeLock(); go('home');
+      S.active = null; save(); stopRest(); releaseWakeLock(); closeSwipeGuard(); go('home');
     });
     return;
   }
@@ -1860,7 +1860,7 @@ function finishWorkout() {
 
   S.workouts.push(finished);
   S.active = null;
-  save(); stopRest(); releaseWakeLock();
+  save(); stopRest(); releaseWakeLock(); closeSwipeGuard();
 
   const vol = workoutVolume(finished);
   openModal(`
@@ -1950,6 +1950,35 @@ function notifyRestOver() {
     })
   ).catch(() => {});
 }
+// Swipe guard: the moment the app is backgrounded mid-workout (which includes
+// opening the app switcher to swipe it away), drop a silent notification into
+// the tray reminding you not to kill it. It self-cleans when you come back.
+function showSwipeGuard() {
+  if (!S.settings.notify || !notificationsSupported() || Notification.permission !== 'granted') return;
+  if (!S.active) return;
+  navigator.serviceWorker.ready.then(reg =>
+    reg.showNotification('💪 Workout in progress — don\'t swipe me!', {
+      body: restEnd
+        ? 'Your rest timer can\'t ring if the app is swiped away. Tap to jump back in (or use ⏰ for a Clock timer).'
+        : 'Swiping the app away stops the rest alarms and screen wake lock. Tap to jump back into your workout.',
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: 'repforge-guard',
+      silent: true,
+    })
+  ).catch(() => {});
+}
+function closeSwipeGuard() {
+  if (!notificationsSupported()) return;
+  navigator.serviceWorker.ready.then(async reg => {
+    (await reg.getNotifications({ tag: 'repforge-guard' })).forEach(n => n.close());
+  }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') showSwipeGuard();
+  else closeSwipeGuard();
+});
+
 async function enableNotifications() {
   if (!notificationsSupported()) {
     toast('Notifications aren\'t supported here — on iPhone, use the app from your home screen (iOS 16.4+).');
