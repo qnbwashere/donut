@@ -1056,7 +1056,10 @@ function renderHome(v) {
             <div class="subtle">${todayItems.length} exercises · ${esc(pi.freqLabel)}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
-        <div class="hist-sets subtle">${esc(todayItems.map(i => EXERCISE_BY_ID[i.exId].name).join(', '))}</div>
+        <button class="plan-view-list" id="plan-view">
+          <span class="hist-sets subtle" style="margin:0">${esc(todayItems.map(i => EXERCISE_BY_ID[i.exId].name).join(', '))}</span>
+          <span class="subtle" style="white-space:nowrap"> · View ›</span>
+        </button>
         <button class="btn primary block mt" id="plan-start">Start today's workout</button>
       </div>`;
   } else if (pi.isDay && pi.doneToday) {
@@ -1153,6 +1156,8 @@ function renderHome(v) {
   if (planEdit) planEdit.onclick = openPlanEditor;
   const planStart = v.querySelector('#plan-start');
   if (planStart) planStart.onclick = () => startGenerated(pi.todayGroups, todayItems, pi.todayName);
+  const planView = v.querySelector('#plan-view');
+  if (planView) planView.onclick = () => openPlannedDay(dayStart(Date.now()));
   const planPull = v.querySelector('#plan-pull');
   if (planPull) planPull.onclick = () => openPlannedDay(pi.nextTs);
   v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openGenerator([b.dataset.quick]));
@@ -1302,21 +1307,23 @@ function openPlannedDay(ts) {
   openModal(`
     <div class="modal-head"><h2>${esc(plan.label)}</h2><button class="icon-btn" id="pd-x">✕</button></div>
     <div class="modal-body">
-      <div class="subtle" style="margin-bottom:10px">${fmtDate(ts)} · planned workout, built from your equipment</div>
+      <div class="subtle" style="margin-bottom:10px">${fmtDate(ts)} · planned workout, built from your equipment · tap an exercise for details</div>
       <div class="card">
         ${items.map(i => {
           const ex = EXERCISE_BY_ID[i.exId];
-          return `<div class="pr-row"><div class="grow"><b style="font-size:0.88rem">${esc(ex.name)}</b>
-            <div class="subtle">${i.sets} × ${esc(i.reps)} · ${esc(equipShort(ex))}</div></div></div>`;
+          return `<button class="pr-row" data-ex="${ex.id}" style="width:100%;text-align:left"><div class="grow"><b style="font-size:0.88rem">${esc(ex.name)}</b>
+            <div class="subtle">${i.sets} × ${esc(i.reps)} · ${esc(equipShort(ex))}</div></div><span style="color:var(--ink-3)">›</span></button>`;
         }).join('') || '<div class="empty-state">No exercises available — add equipment in Profile.</div>'}
       </div>
       ${isToday
-        ? `<button class="btn primary block" id="pd-start" ${items.length ? '' : 'disabled'}>Start this workout</button>`
+        ? `<button class="btn primary block" id="pd-start" ${items.length ? '' : 'disabled'}>Start this workout</button>
+           <p class="subtle center" style="margin-top:8px">Just looking? Close this — nothing starts until you tap the button.</p>`
         : `<button class="btn primary block" id="pd-pull" ${items.length ? '' : 'disabled'}>🔁 Do this workout today instead</button>
            <p class="subtle center" style="margin-top:8px">Moves it to today and makes ${fmtDate(ts)} a rest day. Main lifts stay the same; accessories rotate day to day.</p>`}
     </div>`, {
     onOpen(root) {
       root.querySelector('#pd-x').onclick = closeModal;
+      root.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => openExerciseDetail(b.dataset.ex));
       const st = root.querySelector('#pd-start');
       if (st) st.onclick = () => { closeModal(); startGenerated(plan.groups, items, plan.label); };
       const pull = root.querySelector('#pd-pull');
