@@ -294,8 +294,19 @@ function generateWorkout(groupIds, rand = false, seed = null) {
       let variant = 0;
       if (rand) variant = 'rand';
       else if (seed !== null && !(added === 0 && CLASSIC_PATTERNS.has(pat))) variant = seed + added + i;
-      const ex = pickForPattern(pat, taken, variant);
-      if (ex) { taken.add(ex.id); items.push({ exId: ex.id, sets: 3, reps: repsFor(pat, ex) }); added++; }
+      let ex = pickForPattern(pat, taken, variant);
+      // If this slot would fall to a band exercise, prefer a weighted move from
+      // any of the group's other patterns before settling for the band.
+      if (ex && loadTier(ex) === 0) {
+        let best = null;
+        for (const altPat of def.patterns) {
+          const alt = pickForPattern(altPat, taken, variant);
+          if (alt && loadTier(alt) > loadTier(best || ex)) best = alt;
+        }
+        if (best && loadTier(best) > 0) ex = best;
+      }
+      let usedPat = pat;
+      if (ex) { usedPat = ex.p; taken.add(ex.id); items.push({ exId: ex.id, sets: 3, reps: repsFor(usedPat, ex) }); added++; }
       else if (i >= def.patterns.length - 1 && !added && i >= def.patterns.length * 2) break;
     }
   }
