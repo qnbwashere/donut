@@ -200,9 +200,25 @@ function openAssistPicker(current, onPick) {
 // variant: undefined/0 = best available (the classic), 'rand' = random among
 // the top 3, a number = deterministic rotation among the top 4 — used to vary
 // accessories from one planned day to the next.
+// How trackable/preferred an exercise's loading is: weighted (barbell, dumbbell,
+// machine, cable, kettlebell) is best, bodyweight next, resistance bands last —
+// bands are hard to load precisely, so they're only picked when nothing better
+// is available for that movement.
+function loadTier(ex) {
+  if (ex.eq.length === 1 && ex.eq[0] === 'bands') return 0; // pure-band exercise
+  if (!ex.eq.length) return 1; // bodyweight
+  return 2; // loadable with real weight
+}
 function pickForPattern(pat, taken, variant) {
-  const cand = (PATTERN_PREFER[pat] || []).map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !taken.has(ex.id));
+  let cand = (PATTERN_PREFER[pat] || []).map(id => EXERCISE_BY_ID[id]).filter(ex => ex && canDo(ex) && !taken.has(ex.id));
   if (!cand.length) return EXERCISES.find(e => e.p === pat && canDo(e) && !taken.has(e.id)) || null;
+  // Bands are a true last resort: if any non-band option exists for this
+  // movement, drop the band ones so they're never chosen or rotated in.
+  const nonBand = cand.filter(ex => loadTier(ex) > 0);
+  if (nonBand.length) cand = nonBand;
+  // Stable-sort by load tier so weighted options come before bodyweight; the
+  // variation rotation then cycles the most trackable choices first.
+  cand = cand.map((ex, i) => [ex, i]).sort((a, b) => loadTier(b[0]) - loadTier(a[0]) || a[1] - b[1]).map(p => p[0]);
   if (variant === 'rand') return cand[Math.floor(Math.random() * Math.min(3, cand.length))];
   const v = typeof variant === 'number' ? variant : 0;
   return cand[v % Math.min(4, cand.length)];
