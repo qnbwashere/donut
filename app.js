@@ -231,6 +231,48 @@ function repsFor(pat, ex) {
   return '10-15';
 }
 
+// Best non-band replacement for a band exercise given current equipment,
+// avoiding exercises already `taken`. Returns an exercise or null.
+function bandReplacement(exId, taken = new Set()) {
+  const ex = EXERCISE_BY_ID[exId];
+  if (!ex || loadTier(ex) !== 0) return null;
+  const alt = pickForPattern(ex.p, taken, 0);
+  return alt && alt.id !== exId && loadTier(alt) > 0 ? alt : null;
+}
+
+// One-time cleanup of already-stored workouts the user hasn't done yet — saved
+// routines and any in-progress workout — swapping band exercises for weighted
+// ones now that bands are last-resort. Planned/future workouts regenerate on
+// their own, so they need no migration. Completed sets are never touched.
+function migrateBandExercises() {
+  let changed = 0;
+  for (const r of S.routines || []) {
+    const taken = new Set(r.items.map(i => i.exId));
+    for (const it of r.items) {
+      taken.delete(it.exId);
+      const alt = bandReplacement(it.exId, taken);
+      if (alt) { it.exId = alt.id; changed++; taken.add(alt.id); }
+      else taken.add(it.exId);
+    }
+  }
+  if (S.active) {
+    const taken = new Set(S.active.entries.map(e => e.exId));
+    for (const en of S.active.entries) {
+      if (en.sets.some(s => s.done)) continue; // don't touch logged work
+      taken.delete(en.exId);
+      const alt = bandReplacement(en.exId, taken);
+      if (alt) {
+        const setCount = en.sets.length;
+        const replaced = makeEntry(alt.id, setCount, en.targetReps);
+        S.active.entries[S.active.entries.indexOf(en)] = replaced;
+        changed++; taken.add(alt.id);
+      } else taken.add(en.exId);
+    }
+  }
+  if (changed) save();
+  return changed;
+}
+
 // Build a workout (list of routine items) for the given muscle groups,
 // using only exercises the user's equipment allows. With a `seed` (days since
 // the plan's anchor), each group's first exercise stays the classic pick
@@ -2473,6 +2515,16 @@ function renderProfile(v) {
 }
 
 // ===================== Boot =====================
+// One-time cleanup: swap band exercises out of already-saved routines / an
+// in-progress workout now that bands are last-resort (runs once for existing
+// data; future planned workouts already regenerate band-free).
+if (S.onboarded && !S.settings.bandsMigrated) {
+  const n = migrateBandExercises();
+  S.settings.bandsMigrated = true;
+  save();
+  if (n) setTimeout(() => toast(`Updated ${n} exercise${n > 1 ? 's' : ''} from bands to weighted 💪`), 700);
+}
+
 // Reopening mid-workout drops you straight back into the active workout —
 // everything (sets, weights, the clock, the rest timer) is saved on every tap.
 if (S.active && S.onboarded) currentTab = 'workout';
