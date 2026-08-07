@@ -514,6 +514,58 @@ function planForDate(ts) {
   return { label: groups.join(' & '), groups, seed: diff };
 }
 
+// If scheduled workouts were missed (a past workout day with nothing logged),
+// roll each onto the next upcoming rest day instead of dropping it. Cascades —
+// a missed make-up rolls to the following rest day. Each past day is evaluated
+// exactly once (tracked by reconciledThru). Returns the placements made.
+function reconcileMissedWorkouts() {
+  const p = S.plan;
+  if (!p || !p.enabled) return [];
+  const DAY = 864e5;
+  const today = dayStart(Date.now());
+  p.overrides = p.overrides || {};
+  p.makeupQueue = p.makeupQueue || [];
+  // First run looks back a few days so a very recent miss is caught, without
+  // dredging up ancient history.
+  if (p.reconciledThru == null) p.reconciledThru = Math.max((p.anchor || today) - DAY, today - 4 * DAY);
+
+  // Evaluate each past day (through yesterday) exactly once.
+  for (let d = p.reconciledThru + DAY; d <= today - DAY; d += DAY) {
+    const sched = planForDate(d);
+    if (sched && !S.workouts.some(w => dayStart(w.start) === d)) {
+      p.makeupQueue.push({ seed: sched.seed, label: sched.label });
+    }
+  }
+  p.reconciledThru = Math.max(p.reconciledThru, today - DAY);
+  if (p.makeupQueue.length > 14) p.makeupQueue = p.makeupQueue.slice(-14); // safety cap
+
+  // Drain the queue onto upcoming rest days (today forward).
+  const placed = [];
+  let d = today, guard = 0;
+  while (p.makeupQueue.length && guard < 90) {
+    const isRest = planForDate(d) === null;
+    const trainedToday = d === today && S.workouts.some(w => dayStart(w.start) === today);
+    if (isRest && !(d in p.overrides) && !trainedToday) {
+      const m = p.makeupQueue.shift();
+      p.overrides[d] = m.seed;
+      placed.push({ label: m.label, ts: d });
+    }
+    d += DAY; guard++;
+  }
+  // Prune very old overrides so the map doesn't grow forever.
+  for (const k of Object.keys(p.overrides)) if (+k < today - 60 * DAY) delete p.overrides[k];
+  if (placed.length || p.makeupQueue.length) save();
+  return placed;
+}
+// Is today's workout a made-up (rolled-over) one rather than the regular slot?
+function isMakeupDay(ts) {
+  const p = S.plan; if (!p || !p.overrides) return false;
+  const day = dayStart(ts);
+  if (!(day in p.overrides) || p.overrides[day] === -1) return false;
+  const naturalDiff = Math.round((day - p.anchor) / 864e5);
+  return p.overrides[day] !== naturalDiff;
+}
+
 // What does the plan say about today? null when no active plan.
 function planInfo() {
   const p = S.plan;
@@ -532,6 +584,7 @@ function planInfo() {
     todayGroups: t ? t.groups : null,
     todayName: t ? t.label : null,
     seed: t ? t.seed : 0,
+    isMakeup: !!t && isMakeupDay(today),
     nextTs,
     nextName: next ? next.label : '',
     freqLabel: p.type === 'weekly' ? preset.short : (FREQ_LABELS[p.freq] || `every ${p.freq} days`),
@@ -1121,8 +1174,8 @@ function renderHome(v) {
     planHtml = `
       <div class="card plan-card">
         <div class="row">
-          <div class="grow"><b>💪 Today: ${esc(pi.todayName)}</b>
-            <div class="subtle">${todayItems.length} exercises · ${esc(pi.freqLabel)}</div></div>
+          <div class="grow"><b>💪 Today: ${esc(pi.todayName)}${pi.isMakeup ? ' <span class="tag accent">make-up</span>' : ''}</b>
+            <div class="subtle">${todayItems.length} exercises · ${esc(pi.freqLabel)}${pi.isMakeup ? ' · rolled over from a missed day' : ''}</div></div>
           <button class="btn sm ghost" id="plan-edit">Edit</button>
         </div>
         <button class="plan-view-list" id="plan-view">
@@ -2536,12 +2589,24 @@ if (S.onboarded && !S.settings.bandsMigrated) {
   if (n) setTimeout(() => toast(`Updated ${n} exercise${n > 1 ? 's' : ''} from bands to weighted 💪`), 700);
 }
 
+// Roll any missed scheduled workouts onto upcoming rest days.
+let missedPlacements = [];
+if (S.onboarded) missedPlacements = reconcileMissedWorkouts();
+
 // Reopening mid-workout drops you straight back into the active workout —
 // everything (sets, weights, the clock, the rest timer) is saved on every tap.
 if (S.active && S.onboarded) currentTab = 'workout';
 render();
 resumeRestIfNeeded();
 acquireWakeLock();
+
+if (missedPlacements.length) {
+  const m = missedPlacements[0];
+  const msg = missedPlacements.length === 1
+    ? `Missed ${m.label} → moved to ${dayStart(m.ts) === dayStart(Date.now()) ? 'today' : fmtDate(m.ts)} 📆`
+    : `${missedPlacements.length} missed workouts rolled onto upcoming rest days 📆`;
+  setTimeout(() => toast(msg), 1100);
+}
 
 // Evening nudge: opening the app after a habit's reminder time, still unchecked.
 if (S.onboarded && currentTab === 'home') {
