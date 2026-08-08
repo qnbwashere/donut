@@ -809,10 +809,27 @@ function lastPerformance(exId) {
   return null;
 }
 
+// Exercises done with a pair of dumbbells. When the user logs dumbbell weight
+// "per dumbbell", the true load moved is 2× the entered number for these — used
+// for total-poundage (volume) stats. Single-dumbbell moves (one-arm row, goblet
+// squat, etc.) and non-dumbbell exercises are never doubled.
+const TWO_DB = new Set([
+  'db_bench', 'db_incline_bench', 'db_squeeze_press', 'db_floor_press', 'db_fly', 'incline_db_fly',
+  'db_shoulder_press', 'seated_db_press', 'arnold_press', 'lateral_raise', 'front_raise', 'rear_delt_fly',
+  'db_curl', 'hammer_curl', 'incline_db_curl', 'spider_curl', 'zottman_curl',
+  'walking_lunge', 'db_rdl', 'db_calf', 'db_shrug',
+]);
+// Load multiplier applied to entered weight for total-poundage stats.
+function loadFactor(exId) {
+  return (S.settings.dbPerHand && TWO_DB.has(exId)) ? 2 : 1;
+}
+// Total load moved for one set (accounts for a pair of dumbbells in per-hand mode).
+function setLoad(exId, w) { return (+w || 0) * loadFactor(exId); }
+
 function workoutVolume(w) {
   let vol = 0;
   for (const en of w.entries) for (const st of en.sets) {
-    if (st.done) vol += (+st.w || 0) * (+st.r || 0);
+    if (st.done) vol += setLoad(en.exId, st.w) * (+st.r || 0);
   }
   return vol;
 }
@@ -1491,7 +1508,9 @@ function setLabel(ex, s) {
   if (!ex) return '';
   if (ex.t === 't') return fmtClock(+s.time || 0) + ' min:sec';
   if (ex.t === 'r' && !(+s.w)) return `${+s.r || 0} reps${s.assist ? ` ${assistDot(s.assist, 9)} ${esc(s.assist)}` : ''}`;
-  return `${+s.w || 0} ${unit()} × ${+s.r || 0}`;
+  const w = +s.w || 0;
+  const total = S.settings.dbPerHand && TWO_DB.has(ex.id) ? ` <span class="subtle">(${w * 2} total)</span>` : '';
+  return `${w} ${unit()} × ${+s.r || 0}${total}`;
 }
 
 // ===================== Exercises tab =====================
@@ -1605,7 +1624,7 @@ function openExerciseDetail(exId, flashRecs = false) {
       </div>
       <div class="stat-grid" style="margin-bottom:12px">
         <div class="stat-tile"><div class="stat-value">${isWr ? (rec.bestW || '—') : (ex.t === 'r' ? (rec.bestReps || '—') : (rec.bestTime ? fmtClock(rec.bestTime) : '—'))}</div>
-          <div class="stat-label">${isWr ? 'Best ' + esc(unit()) : ex.t === 'r' ? 'Best reps' : 'Best time'}</div></div>
+          <div class="stat-label">${isWr ? 'Best ' + esc(unit()) + (S.settings.dbPerHand && TWO_DB.has(ex.id) ? '/hand' : '') : ex.t === 'r' ? 'Best reps' : 'Best time'}</div></div>
         <div class="stat-tile"><div class="stat-value">${isWr && rec.bestE ? Math.round(rec.bestE) : '—'}</div><div class="stat-label">Est. 1RM</div></div>
         <div class="stat-tile"><div class="stat-value">${points.length}</div><div class="stat-label">Sessions</div></div>
       </div>
@@ -1993,7 +2012,7 @@ function entryCard(en, ei) {
         <button class="icon-btn" data-swap="${ei}" title="Swap exercise">⇄</button>
         <button class="icon-btn" data-rment="${ei}" title="Remove">✕</button>
       </div>
-      <div class="subtle" style="font-size:0.75rem;margin-bottom:4px">${esc(ex.m)} · ${esc(equipShort(ex))}${en.targetReps ? ` · target ${esc(String(en.targetReps))} reps` : ''}</div>
+      <div class="subtle" style="font-size:0.75rem;margin-bottom:4px">${esc(ex.m)} · ${esc(equipShort(ex))}${en.targetReps ? ` · target ${esc(String(en.targetReps))} reps` : ''}${S.settings.dbPerHand && TWO_DB.has(ex.id) ? ' · <span style="color:var(--accent)">per dumbbell (×2 in totals)</span>' : ''}</div>
       ${lastTimeLine(en)}
       <table class="set-table">
         <thead><tr>
@@ -2467,6 +2486,15 @@ function renderProfile(v) {
       </div>
       <div class="divider"></div>
       <div class="row" style="justify-content:space-between">
+        <div><span>Dumbbell weight I enter is</span>
+          <div class="subtle" style="font-size:0.75rem">"Per dumbbell" doubles the load for two-dumbbell lifts (e.g. 30 → 60 total) in your volume stats</div></div>
+        <div style="white-space:nowrap">
+          <button class="chip ${!S.settings.dbPerHand ? 'active' : ''}" data-db="total">Total</button>
+          <button class="chip ${S.settings.dbPerHand ? 'active' : ''}" data-db="per">Per&nbsp;dumbbell</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="row" style="justify-content:space-between">
         <div><span>Rest notifications</span>
           <div class="subtle" style="font-size:0.75rem">Pings you when rest is over and you're in another app</div></div>
         <button class="chip ${S.settings.notify ? 'active' : ''}" id="notif-toggle">${S.settings.notify ? 'On' : 'Off'}</button>
@@ -2541,6 +2569,10 @@ function renderProfile(v) {
   });
   v.querySelectorAll('[data-rest]').forEach(b => b.onclick = () => {
     S.settings.restSec = +b.dataset.rest; save(); render();
+  });
+  v.querySelectorAll('[data-db]').forEach(b => b.onclick = () => {
+    S.settings.dbPerHand = b.dataset.db === 'per'; save(); render();
+    toast(S.settings.dbPerHand ? 'Logging per dumbbell — totals now count both 💪' : 'Logging total load');
   });
 
   v.querySelector('#exp-data').onclick = () => {
