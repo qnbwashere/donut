@@ -4,6 +4,9 @@
   const FEEDS = [
     { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/football/teams/chelsea/rss.xml' },
     { name: 'The Guardian', url: 'https://www.theguardian.com/football/chelsea/rss' },
+    // General football feeds — filtered down to Chelsea-relevant items below.
+    { name: 'Fabrizio Romano (CaughtOffside)', url: 'https://www.caughtoffside.com/tag/fabrizio-romano/feed/', chelseaOnly: true },
+    { name: 'Fabrizio Romano (Daily Briefing)', url: 'https://caughtoffside.substack.com/feed', chelseaOnly: true },
   ];
 
   const HASHTAGS = '#CFC #Chelsea #ChelseaFC #PremierLeague #StamfordBridge #cfcbluebridge';
@@ -138,7 +141,7 @@
 
   function guessCategory(title, desc) {
     const t = `${title} ${desc}`.toLowerCase();
-    if (/sign|transfer|loan deal|medical|fee agreed|move to|deal agreed/.test(t)) return 'Transfer News';
+    if (/sign|transfer|loan deal|medical|fee agreed|move to|deal agreed|here we go/.test(t)) return 'Transfer News';
     if (/injur|surgery|sidelined|return from|fitness test/.test(t)) return 'Injury Update';
     if (/\d+-\d+|beat |win |draw |defeat|full-time|full time|victory|thrash/.test(t)) return 'Match Report';
     if (/line-?up|starting xi|team news|squad named/.test(t)) return 'Team News';
@@ -156,7 +159,11 @@
         const res = await fetch(`/api/rss?url=${encodeURIComponent(feed.url)}`);
         if (!res.ok) throw new Error(feed.name);
         const text = await res.text();
-        return parseRSS(text, feed.name);
+        let parsed = parseRSS(text, feed.name);
+        if (feed.chelseaOnly) {
+          parsed = parsed.filter((it) => /chelsea|stamford bridge|\bcfc\b/i.test(`${it.title} ${it.desc}`));
+        }
+        return parsed;
       })
     );
 

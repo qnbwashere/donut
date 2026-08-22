@@ -7,6 +7,9 @@ const ALLOWED_HOST_PATTERNS = [
   /(^|\.)bbc\.co\.uk$/,
   /(^|\.)guim\.co\.uk$/,
   /(^|\.)theguardian\.com$/,
+  /(^|\.)caughtoffside\.com$/,
+  /(^|\.)substackcdn\.com$/,
+  /^substack-post-media\.s3\.amazonaws\.com$/,
 ];
 
 module.exports = async (req, res) => {

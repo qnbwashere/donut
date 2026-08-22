@@ -4,6 +4,8 @@
 const ALLOWED_FEEDS = new Set([
   'https://feeds.bbci.co.uk/sport/football/teams/chelsea/rss.xml',
   'https://www.theguardian.com/football/chelsea/rss',
+  'https://www.caughtoffside.com/tag/fabrizio-romano/feed/',
+  'https://caughtoffside.substack.com/feed',
 ]);
 
 module.exports = async (req, res) => {
