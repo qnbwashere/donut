@@ -3,10 +3,10 @@
   --bg-elev: #0a1e40;
   --card: #0d2547;
   --blue: #034694;
-  --yellow: #f2e94e;
+  --yellow: #fce432;
   --text: #eef3fb;
   --text-dim: #9fb0cc;
-  --border: rgba(242, 233, 78, 0.18);
+  --border: rgba(252, 228, 50, 0.18);
   --radius: 14px;
 }
 
@@ -143,6 +143,15 @@ html, body {
 .poster-controls { display: flex; flex-direction: column; gap: 14px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+#group-fixture.hidden, #group-matchday.hidden, #group-lineup.hidden, #group-headline.hidden {
+  display: none;
+}
+
+#group-fixture, #group-lineup { display: flex; flex-direction: column; gap: 14px; }
 
 .field input, .field select, .field textarea {
   font-family: inherit;

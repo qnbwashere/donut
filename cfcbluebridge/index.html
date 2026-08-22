@@ -45,25 +45,91 @@
 
         <div class="poster-controls">
           <label class="field">
-            <span>Category</span>
-            <select id="ctl-category">
-              <option>Club News</option>
-              <option>Match Report</option>
-              <option>Transfer News</option>
-              <option>Injury Update</option>
-              <option>Team News</option>
+            <span>Template</span>
+            <select id="ctl-template">
+              <option value="headline">Headline</option>
+              <option value="matchday">Matchday</option>
+              <option value="lineup">Starting XI</option>
             </select>
           </label>
 
-          <label class="field">
-            <span>Headline</span>
-            <textarea id="ctl-headline" rows="3" placeholder="Type or pick a headline from News"></textarea>
-          </label>
+          <div id="group-headline">
+            <label class="field">
+              <span>Category</span>
+              <select id="ctl-category">
+                <option>Club News</option>
+                <option>Match Report</option>
+                <option>Transfer News</option>
+                <option>Injury Update</option>
+                <option>Team News</option>
+              </select>
+            </label>
 
-          <label class="field">
-            <span>Source credit (optional)</span>
-            <input id="ctl-source" type="text" placeholder="e.g. BBC Sport">
-          </label>
+            <label class="field">
+              <span>Headline</span>
+              <textarea id="ctl-headline" rows="3" placeholder="Type or pick a headline from News"></textarea>
+            </label>
+
+            <label class="field">
+              <span>Source credit (optional)</span>
+              <input id="ctl-source" type="text" placeholder="e.g. BBC Sport">
+            </label>
+          </div>
+
+          <div id="group-fixture">
+            <div class="field-row">
+              <label class="field">
+                <span>Opponent code</span>
+                <input id="ctl-opponent" type="text" placeholder="e.g. ARS" maxlength="4">
+              </label>
+              <label class="field">
+                <span>Venue side</span>
+                <select id="ctl-homeaway">
+                  <option value="H">Home</option>
+                  <option value="A">Away</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div id="group-matchday">
+            <label class="field">
+              <span>Competition</span>
+              <select id="ctl-competition">
+                <option>Premier League</option>
+                <option>FA Cup</option>
+                <option>EFL Cup</option>
+                <option>UEFA Champions League</option>
+                <option>UEFA Conference League</option>
+                <option>Friendly</option>
+              </select>
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>Date</span>
+                <input id="ctl-date" type="text" placeholder="Sat 30th Aug">
+              </label>
+              <label class="field">
+                <span>Kick-off</span>
+                <input id="ctl-kickoff" type="text" placeholder="15:00">
+              </label>
+            </div>
+            <label class="field">
+              <span>Venue</span>
+              <input id="ctl-venue" type="text" placeholder="Stamford Bridge">
+            </label>
+          </div>
+
+          <div id="group-lineup">
+            <label class="field">
+              <span>Starting XI (one per line)</span>
+              <textarea id="ctl-starters" rows="6" placeholder="Sanchez&#10;Fofana&#10;Lacroix&#10;...&#10;James (C)"></textarea>
+            </label>
+            <label class="field">
+              <span>Substitutes (comma separated)</span>
+              <textarea id="ctl-subs" rows="2" placeholder="Penders, Slonina, Gusto, Hato"></textarea>
+            </label>
+          </div>
 
           <div class="field">
             <span>Photo</span>

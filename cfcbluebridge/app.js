@@ -216,6 +216,8 @@
   }
 
   function useNewsItem(item, category, imgSrc) {
+    document.getElementById('ctl-template').value = 'headline';
+    applyTemplateVisibility();
     document.getElementById('ctl-headline').value = item.title;
     document.getElementById('ctl-category').value = category;
     document.getElementById('ctl-source').value = item.source;
@@ -235,6 +237,55 @@
     return `${headline}\n\n${category} 🔵\n\n${HASHTAGS}`;
   }
 
+  function buildMatchdayCaption() {
+    const opp = document.getElementById('ctl-opponent').value.trim().toUpperCase() || 'TBC';
+    const side = document.getElementById('ctl-homeaway').value === 'H' ? '(H)' : '(A)';
+    const comp = document.getElementById('ctl-competition').value;
+    const date = document.getElementById('ctl-date').value.trim();
+    const ko = document.getElementById('ctl-kickoff').value.trim();
+    const venue = document.getElementById('ctl-venue').value.trim();
+    return `MATCHDAY 🔵\nCFC vs ${opp} ${side}\n${comp}${date ? ` — ${date}` : ''}${ko ? ` — ${ko}` : ''}${venue ? `\n📍 ${venue}` : ''}\n\n${HASHTAGS}`;
+  }
+
+  function buildLineupCaption() {
+    const opp = document.getElementById('ctl-opponent').value.trim().toUpperCase() || 'TBC';
+    const starters = document.getElementById('ctl-starters').value.trim();
+    return `STARTING XI vs ${opp} 🔵\n\n${starters}\n\n${HASHTAGS}`;
+  }
+
+  // ---------- template switching ----------
+  const TEMPLATE_GROUPS = {
+    headline: ['group-headline'],
+    matchday: ['group-fixture', 'group-matchday'],
+    lineup: ['group-fixture', 'group-lineup'],
+  };
+
+  function applyTemplateVisibility() {
+    const tpl = document.getElementById('ctl-template').value;
+    for (const groupId of ['group-headline', 'group-fixture', 'group-matchday', 'group-lineup']) {
+      document.getElementById(groupId).classList.toggle('hidden', !TEMPLATE_GROUPS[tpl].includes(groupId));
+    }
+  }
+
+  function refreshCaption() {
+    const tpl = document.getElementById('ctl-template').value;
+    const captionEl = document.getElementById('ctl-caption');
+    if (tpl === 'matchday') {
+      captionEl.value = buildMatchdayCaption();
+    } else if (tpl === 'lineup') {
+      captionEl.value = buildLineupCaption();
+    } else {
+      const headline = document.getElementById('ctl-headline').value.trim();
+      if (headline) captionEl.value = buildCaption(headline, document.getElementById('ctl-category').value);
+    }
+  }
+
+  document.getElementById('ctl-template').addEventListener('change', () => {
+    applyTemplateVisibility();
+    refreshCaption();
+    redrawPoster();
+  });
+
   document.getElementById('ctl-headline').addEventListener('input', () => {
     redrawPoster();
   });
@@ -246,6 +297,16 @@
     redrawPoster();
   });
   document.getElementById('ctl-source').addEventListener('input', redrawPoster);
+
+  for (const id of ['ctl-opponent', 'ctl-homeaway', 'ctl-competition', 'ctl-date', 'ctl-kickoff', 'ctl-venue']) {
+    document.getElementById(id).addEventListener('input', () => { refreshCaption(); redrawPoster(); });
+    document.getElementById(id).addEventListener('change', () => { refreshCaption(); redrawPoster(); });
+  }
+  for (const id of ['ctl-starters', 'ctl-subs']) {
+    document.getElementById(id).addEventListener('input', () => { refreshCaption(); redrawPoster(); });
+  }
+
+  applyTemplateVisibility();
 
   // ---------- photos ----------
   const poster = {
@@ -312,7 +373,7 @@
   const W = canvas.width;
   const H = canvas.height;
   const BLUE = '#03122b';
-  const YELLOW = '#f2e94e';
+  const YELLOW = '#fce432';
 
   let currentImage = null;
   let currentImageSrc = null;
@@ -328,9 +389,7 @@
   }
 
   function doDraw() {
-    const headline = document.getElementById('ctl-headline').value.trim() || 'YOUR HEADLINE HERE';
-    const category = document.getElementById('ctl-category').value;
-    const sourceLabel = document.getElementById('ctl-source').value.trim();
+    const template = document.getElementById('ctl-template').value;
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = BLUE;
@@ -338,9 +397,18 @@
 
     const finish = () => {
       drawOverlayAndFrame();
-      drawTopTag(category);
-      drawHeadline(headline);
-      drawFooter(sourceLabel);
+      if (template === 'matchday') {
+        drawMatchday();
+      } else if (template === 'lineup') {
+        drawLineup();
+      } else {
+        const headline = document.getElementById('ctl-headline').value.trim() || 'YOUR HEADLINE HERE';
+        const category = document.getElementById('ctl-category').value;
+        const sourceLabel = document.getElementById('ctl-source').value.trim();
+        drawTopTag(category);
+        drawHeadline(headline);
+        drawFooter(sourceLabel);
+      }
     };
 
     if (poster.selectedPhoto) {
@@ -397,6 +465,48 @@
     drawOrnateFrame(40);
   }
 
+  function drawDiamond(cx, cy, s) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s);
+    ctx.lineTo(cx + s, cy);
+    ctx.lineTo(cx, cy + s);
+    ctx.lineTo(cx - s, cy);
+    ctx.closePath();
+    ctx.fillStyle = BLUE;
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function drawPlusCluster(cx, cy) {
+    ctx.save();
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = YELLOW;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const gap = 16;
+    ctx.fillText('+', cx - gap, cy);
+    ctx.fillText('+', cx, cy);
+    ctx.fillText('+', cx + gap, cy);
+    ctx.fillText('+', cx - gap / 2, cy + gap);
+    ctx.fillText('+', cx + gap / 2, cy + gap);
+    ctx.restore();
+  }
+
+  // A shallow chevron with a diamond node at its centre — the flourish
+  // used both as the frame corners and as a horizontal section divider.
+  function drawFlourishDivider(y, inset) {
+    const dip = 16;
+    ctx.save();
+    ctx.strokeStyle = YELLOW;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(inset, y);
+    ctx.quadraticCurveTo(W / 2, y + dip * 2, W - inset, y);
+    ctx.stroke();
+    drawDiamond(W / 2, y + dip, 10);
+    ctx.restore();
+  }
+
   function drawOrnateFrame(inset) {
     const x = inset, y = inset, w = W - inset * 2, h = H - inset * 2;
     ctx.save();
@@ -404,29 +514,36 @@
     ctx.lineWidth = 3;
     ctx.strokeRect(x, y, w, h);
 
-    // corner diamonds
     const corners = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
-    for (const [cx, cy] of corners) {
-      ctx.beginPath();
-      const s = 14;
-      ctx.moveTo(cx, cy - s);
-      ctx.lineTo(cx + s, cy);
-      ctx.lineTo(cx, cy + s);
-      ctx.lineTo(cx - s, cy);
-      ctx.closePath();
-      ctx.fillStyle = BLUE;
-      ctx.fill();
-      ctx.stroke();
-    }
+    for (const [cx, cy] of corners) drawDiamond(cx, cy, 14);
 
-    // small plus marks near corners
-    ctx.font = '28px sans-serif';
+    drawPlusCluster(x + 40, y + 40);
+    drawPlusCluster(x + w - 40, y + 40);
+    ctx.restore();
+  }
+
+  // Generic shield placeholder crest — deliberately not a copy of any
+  // club's actual badge artwork, just initials in a shield outline.
+  function drawShieldBadge(cx, cy, r, code) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy - r * 0.7);
+    ctx.lineTo(cx + r, cy - r * 0.7);
+    ctx.lineTo(cx + r, cy + r * 0.15);
+    ctx.quadraticCurveTo(cx + r, cy + r * 0.9, cx, cy + r * 1.15);
+    ctx.quadraticCurveTo(cx - r, cy + r * 0.9, cx - r, cy + r * 0.15);
+    ctx.closePath();
+    ctx.fillStyle = BLUE;
+    ctx.fill();
+    ctx.strokeStyle = YELLOW;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
     ctx.fillStyle = YELLOW;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const offset = 34;
-    ctx.fillText('+', x + offset, y + offset);
-    ctx.fillText('+', x + w - offset, y + offset);
+    ctx.font = `bold ${Math.round(r * 0.62)}px Anton`;
+    ctx.fillText(code, cx, cy + r * 0.1);
     ctx.restore();
   }
 
@@ -534,12 +651,118 @@
     ctx.restore();
   }
 
+  function getFixtureInfo() {
+    const opponent = document.getElementById('ctl-opponent').value.trim().toUpperCase() || 'TBC';
+    const side = document.getElementById('ctl-homeaway').value;
+    return { opponent, side };
+  }
+
+  function drawMatchday() {
+    const { opponent, side } = getFixtureInfo();
+    const competition = document.getElementById('ctl-competition').value;
+    const date = document.getElementById('ctl-date').value.trim();
+    const kickoff = document.getElementById('ctl-kickoff').value.trim();
+    const venue = document.getElementById('ctl-venue').value.trim();
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = '112px Anton';
+    ctx.fillStyle = YELLOW;
+    ctx.fillText('MATCHDAY', 70, 100);
+    ctx.restore();
+
+    drawShieldBadge(112, 300, 44, 'CFC');
+    drawShieldBadge(210, 300, 44, opponent.slice(0, 3));
+
+    drawFlourishDivider(H - 150, 60);
+
+    const barY = H - 110;
+    ctx.save();
+    ctx.fillStyle = 'rgba(3,18,43,0.92)';
+    ctx.fillRect(40, barY, W - 80, 70);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '600 20px Inter, sans-serif';
+    ctx.fillStyle = YELLOW;
+    ctx.fillText(competition, 60, barY + 22);
+    ctx.font = '400 16px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText(`CFC vs ${opponent} (${side})${venue ? ` · ${venue}` : ''}`, 60, barY + 48);
+
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 26px Anton';
+    ctx.fillStyle = YELLOW;
+    ctx.fillText(kickoff || '--:--', W - 60, barY + 22);
+    ctx.font = '400 15px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText(date || '', W - 60, barY + 48);
+    ctx.restore();
+  }
+
+  function drawLineup() {
+    const { opponent } = getFixtureInfo();
+    const starters = document.getElementById('ctl-starters').value.split('\n').map((s) => s.trim()).filter(Boolean);
+    const subs = document.getElementById('ctl-subs').value.split(',').map((s) => s.trim()).filter(Boolean);
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = '92px Anton';
+    ctx.fillStyle = YELLOW;
+    ctx.fillText('STARTING', 70, 90);
+    ctx.fillText('XI', 70, 180);
+    ctx.restore();
+
+    drawShieldBadge(96, 380, 40, 'CFC');
+    drawShieldBadge(96, 470, 40, opponent.slice(0, 3));
+
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = '500 34px Inter, sans-serif';
+    ctx.fillStyle = YELLOW;
+    ctx.textBaseline = 'top';
+    let y = 330;
+    const lineGap = 56;
+    starters.slice(0, 11).forEach((name) => {
+      ctx.fillText(name, W - 70, y);
+      y += lineGap;
+    });
+    ctx.restore();
+
+    drawFlourishDivider(H - 150, 60);
+
+    if (subs.length) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = YELLOW;
+      ctx.font = '600 20px Inter, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Substitutes', W / 2, H - 116);
+      ctx.font = '400 16px Inter, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fillText(subs.join('  ·  '), W / 2, H - 86);
+      ctx.restore();
+    }
+  }
+
   // ---------- queue actions ----------
   document.getElementById('btn-add-queue').addEventListener('click', async () => {
-    const headline = document.getElementById('ctl-headline').value.trim();
-    if (!headline) {
-      toast('Add a headline first');
-      return;
+    const template = document.getElementById('ctl-template').value;
+    let headline;
+    if (template === 'matchday') {
+      const { opponent, side } = getFixtureInfo();
+      headline = `Matchday: CFC vs ${opponent} (${side})`;
+    } else if (template === 'lineup') {
+      const { opponent } = getFixtureInfo();
+      headline = `Starting XI vs ${opponent}`;
+    } else {
+      headline = document.getElementById('ctl-headline').value.trim();
+      if (!headline) {
+        toast('Add a headline first');
+        return;
+      }
     }
     const caption = document.getElementById('ctl-caption').value.trim() || buildCaption(headline, document.getElementById('ctl-category').value);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
