@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#03122b">
+<title>CFC Blue Bridge — News Poster Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">CFC</span>
+      <div class="brand-text">
+        <strong>Blue Bridge Studio</strong>
+        <span>Post drafts for @cfcbluebridge</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="view" class="view">
+
+    <section id="panel-news" class="panel">
+      <div class="panel-head">
+        <h1>Latest Chelsea news</h1>
+        <button id="news-refresh" class="btn-ghost">Refresh</button>
+      </div>
+      <div id="news-status" class="status-line"></div>
+      <div id="news-list" class="news-list"></div>
+    </section>
+
+    <section id="panel-poster" class="panel hidden">
+      <div class="panel-head">
+        <h1>Poster</h1>
+      </div>
+
+      <div class="poster-layout">
+        <div class="poster-preview">
+          <canvas id="poster-canvas" width="1080" height="1350"></canvas>
+        </div>
+
+        <div class="poster-controls">
+          <label class="field">
+            <span>Category</span>
+            <select id="ctl-category">
+              <option>Club News</option>
+              <option>Match Report</option>
+              <option>Transfer News</option>
+              <option>Injury Update</option>
+              <option>Team News</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Headline</span>
+            <textarea id="ctl-headline" rows="3" placeholder="Type or pick a headline from News"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Source credit (optional)</span>
+            <input id="ctl-source" type="text" placeholder="e.g. BBC Sport">
+          </label>
+
+          <div class="field">
+            <span>Photo</span>
+            <div class="photo-row">
+              <button id="photo-pick-btn" class="btn-secondary">Upload photo</button>
+              <input id="photo-input" type="file" accept="image/*" multiple hidden>
+              <button id="photo-clear-btn" class="btn-ghost">Use plain background</button>
+            </div>
+            <div id="photo-gallery" class="photo-gallery"></div>
+          </div>
+
+          <div class="field">
+            <span>Caption draft</span>
+            <textarea id="ctl-caption" rows="6"></textarea>
+          </div>
+
+          <div class="poster-actions">
+            <button id="btn-add-queue" class="btn-primary">Add to queue</button>
+            <button id="btn-download" class="btn-secondary">Download PNG</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-queue" class="panel hidden">
+      <div class="panel-head">
+        <h1>Post queue</h1>
+        <span class="status-line" id="queue-count"></span>
+      </div>
+      <p class="hint">Drafts ready to post manually to <strong>@cfcbluebridge</strong>. Nothing here is posted automatically.</p>
+      <div id="queue-list" class="queue-list"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="news"><span class="tab-icon">📰</span>News</button>
+    <button class="tab" data-tab="poster"><span class="tab-icon">🎨</span>Poster</button>
+    <button class="tab" data-tab="queue"><span class="tab-icon">📥</span>Queue</button>
+  </nav>
+
+  <div id="toast-root"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
